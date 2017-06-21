@@ -1,0 +1,76 @@
+import compose from './compose'
+
+/**
+ * Creates a store enhancer that applies middleware to the dispatch method
+ * of the Redux store. This is handy for a variety of tasks, such as expressing
+ * asynchronous actions in a concise manner, or logging every action payload.
+ *
+ * See `redux-thunk` package as an example of the Redux middleware.
+ *
+ * Because middleware is potentially asynchronous, this should be the first
+ * store enhancer in the composition chain.
+ *
+ * Note that each middleware will be given the `dispatch` and `getState` functions
+ * as named arguments.
+ *
+ * @param {...Function} middlewares The middleware chain to be applied.
+ * @returns {Function} A store enhancer applying the middleware.
+ */
+
+
+
+function createStore(reducer, preloadedState, enhancer) {
+    //...
+
+    /*enhancer为applyMiddleware(...middlewares)返回值 createStore => (reducer, preloadedState) => { ... }
+    * 来看如下分解
+    * enhancer(createStore)返回值 (reducer, preloadedState) => { ... }
+    * enhancer(createStore)(reducer, preloddedState)即调用下面函数函数体中内容，主要有以下两部分
+    * 1.创建store  store = createStore(reducer, preloadedState)
+    * 2.通过middlewares加强dispatch，并最后返回store时用加强的dispatch覆盖了原生dispatch
+    * 总结：
+    * 当createStore中传入applyMiddleware(...middlewares)返回的enhaner函数时，即使用了中间件后就会创建一个dispatch加强了的store对象
+    * 如果没有应用中间件，则只会创建一个含有原生dispatch的普通store对象
+    * 即中间件的作用为加强了store对象的dispatch方法
+    *
+    * createStore函数分为两部分:
+    * 1. 没有enhancer函数时，正常创建store对象
+    * 2. 有enhancer函数时，调用enhancer(createStore)(reducer, preloadedState)创建store对象
+    * 而在调用enhancer(createStore)(reducer, preloadedState)时，在其函数内会调用createStore(reducer, preloadedState)来创建1中
+    * 的普通store对象，在这部分就又会去调用createStore中没有enhancer函数时的代码，绕了一圈
+    * enhancer(createStore)(reducer, preloadedState)其实也可以直接写成enhancer(createStore, reducer, preloadedState)
+    * 而applyMiddleware(...middlewares)返回值则要更改为(createStore, reducer, preloadedState) => { ... }的形式
+    * 写成分开的写法可能是考虑到函数式编程的思想，实际上只是用了闭包来暂存变量
+    */
+    return enhancer(createStore)(reducer, preloadedState);
+    //...
+}
+
+export default function applyMiddleware(...middlewares) {
+  // 此处enhancer应该不用传了,因为createStore中就没传该参数
+  return (createStore) => (reducer, preloadedState/*, enhancer*/) => {
+    const store = createStore(reducer, preloadedState/*, enhancer*/)
+    let dispatch = store.dispatch
+    let chain = []
+
+    //简化版store，只向middleware暴露了dispatch和getState函数
+    const middlewareAPI = {
+      getState: store.getState,
+      dispatch: (action) => dispatch(action) //为啥非得写成这种形式，直接dispatch不行？
+    }
+    // middleware函数形如 store => next => action => { ... }
+    // middleware(middlewareAPI)即为middleware(store)
+    // middleware(middlewareAPI)调用返回值为 next => action => { ... }
+    chain = middlewares.map(middleware => middleware(middlewareAPI))
+    // compose(f, g, h)(store.dispatch) 就是 f(g(h(store.dispatch)))
+    // middleware(middlewareAPI)(store.dispatch)调用返回值为 action => { ... }
+    // action => { ... } 就是dispatch函数的形式，此处通过middleware连环调用后覆盖原生
+    dispatch = compose(...chain)(store.dispatch)
+
+    // ...操作符展开store和...对数组作用类似，加强后的dispatch覆盖前面store中展开的原生dispatch
+    return {
+      ...store,
+      dispatch
+    }
+  }
+}
