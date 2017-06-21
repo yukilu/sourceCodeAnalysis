@@ -14,12 +14,12 @@ function createStore(reducer, preloadedState, enhancer) {
     *
     * createStore函数分为两部分:
     * 1. 没有enhancer函数时，正常创建store对象
-    * 2. 有enhancer函数时，调用enhancer(createStore)(reducer, preloadedState)创建store对象
+    * 2. 有enhancer函数时，调用enhancer(createStore)(reducer, preloadedState)创建通过中间件加强了dispatch的store对象
     * 而在调用enhancer(createStore)(reducer, preloadedState)时，在其函数内会调用createStore(reducer, preloadedState)来创建1中
-    * 的普通store对象，在这部分就又会去调用createStore中没有enhancer函数时的代码，绕了一圈
+    * 的普通store对象，在这部分就又会去调用createStore中没有enhancer函数时的代码，绕了一圈回到了1中情况
     * enhancer(createStore)(reducer, preloadedState)其实也可以直接写成enhancer(createStore, reducer, preloadedState)
     * 而applyMiddleware(...middlewares)返回值则要更改为(createStore, reducer, preloadedState) => { ... }的形式
-    * 写成分开的写法可能是考虑到函数式编程的思想，实际上只是用了闭包来暂存变量
+    * 分开的写法可能是考虑到函数式编程的思想，实际上只是用了闭包来暂存变量
     */
     return enhancer(createStore)(reducer, preloadedState);
     //...
