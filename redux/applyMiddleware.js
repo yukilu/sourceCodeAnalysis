@@ -7,14 +7,15 @@ function createStore(reducer, preloadedState, enhancer) {
     * enhancer(createStore)(reducer, preloddedState)即调用下面函数函数体中内容，主要有以下两部分
     * 1.创建store  store = createStore(reducer, preloadedState)
     * 2.通过middlewares加强dispatch，并最后返回store时用加强的dispatch覆盖了原生dispatch
+    * 
     * 总结：
-    * 当createStore中传入applyMiddleware(...middlewares)返回的enhaner函数时，即使用了中间件后就会创建一个dispatch加强了的store对象
-    * 如果没有应用中间件，则只会创建一个含有原生dispatch的普通store对象
-    * 即中间件的作用为加强了store对象的dispatch方法
+    *     当createStore中传入applyMiddleware(...middlewares)返回的enhaner函数时，即使用了中间件后就会创建一个dispatch加强了的store对象
+    * 如果没有应用中间件，则只会创建一个含有原生dispatch的普通store对象，即中间件的作用为加强了store对象的dispatch方法
     *
     * createStore函数分为两部分:
     * 1. 没有enhancer函数时，正常创建store对象
     * 2. 有enhancer函数时，调用enhancer(createStore)(reducer, preloadedState)创建通过中间件加强了dispatch的store对象
+    * 
     * 而在调用enhancer(createStore)(reducer, preloadedState)时，在其函数内会调用createStore(reducer, preloadedState)来创建1中
     * 的普通store对象，在这部分就又会去调用createStore中没有enhancer函数时的代码，绕了一圈回到了1中情况
     * enhancer(createStore)(reducer, preloadedState)其实也可以直接写成enhancer(createStore, reducer, preloadedState)
@@ -27,7 +28,8 @@ function createStore(reducer, preloadedState, enhancer) {
 
 // applyMiddleware(...middlewares)返回值为 createStore => (reducer, preloadedState) => { ... }
 // 为一个函数，实际上传给createStore调用时，并未对middlewares处理，后面的createStore和reducer,preloadedState变量同理
-// 只是利用了闭包的特性，写成函数式的方式，对变量进行了暂存
+// 只是利用了闭包的特性，写成函数式的方式，对middlewares,createStore,reducer,preloaderedState变量进行了暂存
+// 在合适的时候调用函数再对他们一起进行处理
 export default function applyMiddleware(...middlewares) {
   // 此处enhancer应该不用传了,因为createStore中就没传该参数
   return (createStore) => (reducer, preloadedState/*, enhancer*/) => {
