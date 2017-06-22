@@ -27,9 +27,9 @@ function createStore(reducer, preloadedState, enhancer) {
 }
 
 // applyMiddleware(...middlewares)返回值为 createStore => (reducer, preloadedState) => { ... }
-// 为一个函数，实际上传给createStore调用时，并未对middlewares处理，后面的createStore和reducer,preloadedState变量同理
-// 只是利用了闭包的特性，写成函数式的方式，对middlewares,createStore,reducer,preloaderedState变量进行了暂存
-// 在合适的时候调用函数再对他们一起进行处理
+// 为一个函数，实际上传给createStore调用时，并未对middlewares处理，后面的createStore同理
+// 只是利用了闭包的特性，写成函数式的方式，对middlewares,createStore变量进行了暂存
+// 在合适的时候调用函数(reducer, preloadedState) => { ... } 并最终传入reducer，preloadedState再对他们一起进行处理
 export default function applyMiddleware(...middlewares) {
   // 此处enhancer应该不用传了,因为createStore中就没传该参数
   return (createStore) => (reducer, preloadedState/*, enhancer*/) => {
