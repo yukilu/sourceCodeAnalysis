@@ -23,6 +23,10 @@ export default function combineReducers(reducers) {
     for (let i = 0; i < finalReducerKeys.length; i++) {
       const key = finalReducerKeys[i]
       const reducer = finalReducers[key]
+      //小reducer函数返回的是state中各个键对应的值，而非是包含对应键值的对象
+      //state = { a: 0, b: 0 } (大reducer)--> state = { a: 1, b: 1 }
+      //a = 0 (小reducer)--> a = 1，而非{ a: 0 } --> { a: 1 }
+      //b = 0 (小reducer)--> b = 1, 而非{ b: 0 } --> { b: 1 }
       const previousStateForKey = state[key]
       const nextStateForKey = reducer(previousStateForKey, action)
       if (typeof nextStateForKey === 'undefined') {
