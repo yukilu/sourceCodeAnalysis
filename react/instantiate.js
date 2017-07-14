@@ -236,7 +236,7 @@ class DOMComponent {
     }
 }
 
-mountTree(element, containerNode) {
+function mountTree(element, containerNode) {
     if (containerNode.firstChild) {
         const prevNode = containerNode.firstChild;
         const prevRootComponent = prevNode._internalInstance;
@@ -259,7 +259,7 @@ mountTree(element, containerNode) {
     return publicInstance;
 }
 
-unmountTree(containerNode) {
+function unmountTree(containerNode) {
     const node = containerNode.firstChild;
     const rootComponent = node._internalInstance;
 
