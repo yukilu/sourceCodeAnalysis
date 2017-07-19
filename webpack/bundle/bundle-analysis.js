@@ -49,7 +49,7 @@ __webpack_require__中的核心代码入下
 
 包裹代码的单个函数模块  function (module, exports, __webpack_require__) { /* ... */ }
 调用时为 modules[2].call(module.exports, module, module.exports, __webpack_require__)
-即在 __webpack_require__ 函数中讲局部变量 module.exports 通过数组中对应函数模块将需要的值挂载上去
+即在 __webpack_require__ 函数中将局部变量 module.exports 通过数组中对应函数模块将需要的值挂载上去
 然后通过函数 __webpack_require__函数 return module.exports，将 module.exports 结果返回出来
 当然最后一个函数模块的返回值是没有用的，主要是前面的模块能够获取到需要的内容，以此实现模块化
 
