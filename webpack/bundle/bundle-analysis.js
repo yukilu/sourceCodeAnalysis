@@ -79,6 +79,9 @@ __webpack_require__中的核心代码入下
 ]
 
 整体编译完的代码大概如下，省略了__webpack_require__函数上挂载的静态变量
+在自执行函数中直接调用包裹主代码的模块，即数组最后一个元素，然后在其中通过__webpack_require__函数获取需要的模块
+再在需要的模块中依然通过__webpack_require__函数调用需要的模块，一直递归调用__webpack_require__下去，
+直到没有模块为止，然后再逐层返回
 
 (function(modules) {
     var installedModules = {};
