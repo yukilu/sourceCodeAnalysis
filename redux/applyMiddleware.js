@@ -26,10 +26,14 @@ function createStore(reducer, preloadedState, enhancer) {
     //...
 }
 
-// applyMiddleware(...middlewares)返回值为 createStore => (reducer, preloadedState) => { ... }
-// 为一个函数，实际上传给createStore调用时，并未对middlewares处理，后面的createStore同理
-// 只是利用了闭包的特性，写成函数式的方式，对middlewares,createStore变量进行了暂存
-// 在合适的时候调用函数(reducer, preloadedState) => { ... } 并最终传入reducer，preloadedState再对他们一起进行处理
+/* applyMiddleware(...middlewares)返回值为 createStore => (reducer, preloadedState) => { ... }
+** 为一个函数，实际上传给createStore调用时，并未对middlewares处理，后面的createStore同理
+** 只是利用了闭包的特性，写成函数式的方式，对middlewares,createStore变量进行了暂存
+** 在合适的时候调用函数(reducer, preloadedState) => { ... } 并最终传入reducer，preloadedState再对他们一起进行处理
+*/
+
+//middlewares中传入的中间件的调用顺序为从左往右，所以一般异步中间件thunk放在第一个，放后面会造成前面的中间件调用两次
+//applyMiddleware(m0, m1, m2, m3 ...)，m0 -> m1 -> m2 -> m3 ...
 export default function applyMiddleware(...middlewares) {
   // 此处enhancer应该不用传了,因为createStore中就没传该参数
   return (createStore) => (reducer, preloadedState/*, enhancer*/) => {
@@ -40,15 +44,26 @@ export default function applyMiddleware(...middlewares) {
     //简化版store，只向middleware暴露了dispatch和getState函数
     const middlewareAPI = {
       getState: store.getState,
-      dispatch: (action) => dispatch(action) //为啥非得写成这种形式，直接dispatch不行？
+      dispatch: action => dispatch(action) //为啥非得写成这种形式，直接dispatch不行？
+      /* 此处的玄机在于，如果直接写成 dispatch: dispatch，那么middlewareAPI中的dispatch永远指向store的原生dispatch
+      ** 这样的话，在中间件middleware中调用的store.dispatch为原生dispatch，而并非加强过的dispatch，这就不符合要求了
+      ** let dispatch = store.dispatch                 -> 原生
+      ** dispatch = compose(...chain)(store.dispatch)  -> 加强
+      ** 而写成函数形式action => { return dispatch(action); }，则当调用middlewareAPI.dispatch时，函数体{ return dipatch(action); }
+      ** 中的dispatch则会在上层函数中寻找dispatch值，则此时dispatch已经为加强过的dispatch
+      */
     }
-    // middleware函数形如 store => next => action => { ... }
-    // middleware(middlewareAPI)即为middleware(store)
-    // middleware(middlewareAPI)调用返回值为 next => action => { ... }
+
+    /* middleware函数形如 store => next => action => { ... }
+    ** middleware(middlewareAPI)即为middleware(store)
+    ** middleware(middlewareAPI)调用返回值为 next => action => { ... }
+    */
     chain = middlewares.map(middleware => middleware(middlewareAPI))
-    // compose(f, g, h)(store.dispatch) 就是 f(g(h(store.dispatch)))
-    // middleware(middlewareAPI)(store.dispatch)调用返回值为 action => { ... }
-    // action => { ... } 就是dispatch函数的形式，此处通过middleware连环调用后覆盖原生
+
+    /* compose(f, g, h)(store.dispatch) 就是 f(g(h(store.dispatch)))
+    ** middleware(middlewareAPI)(store.dispatch)调用返回值为 action => { ... }
+    ** action => { ... } 就是dispatch函数的形式，此处通过middleware连环调用后覆盖原生 
+    */
     dispatch = compose(...chain)(store.dispatch)
 
     // ...操作符展开store和...对数组作用类似，加强后的dispatch覆盖前面store中展开的原生dispatch
