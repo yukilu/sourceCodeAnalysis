@@ -33,10 +33,11 @@ export default function compose(...funcs) {
 **  f2  f1  f0
 ** 
 **  当funcs为高阶函数时，元素形如 next => action => next(action)，调用compose(...funcs)时，是从后往前调用的
-**  但是由于f(composed)返回值为函数，所以最后compose(...funcs)的返回值为函数，假设为fn
-**  当调用fn时，实际上会按照传入的funcs的顺序从前往后调用对应的函数体，再根据next的值进行连环调用(类似于递归),再逐层返回
+**  但是由于f(composed)返回值为函数，形如 action => next(action)
+**  调用compose，并传入初始next函数，返回值仍为函数，fn = compose(...funcs)(next)
+**  调用fn(action)时，会按照传入的funcs的顺序从前往后调用对应的函数体，再根据next的值进行连环调用(类似于递归),再逐层返回
 **  实际上和递归一样，当console.log位于next前面时，是 f0 f1 f2，当位于next后面时，就为 f2 f1 f0
-**  但执行函数入口处时，确实是从前往后的，这和非高阶函数的执行结果相反
+**  但执行函数入口处时，确实是从前往后的，这和非高阶函数的执行顺序是相反的
 **  const f0 = next => n => { console.log('f0'); n = next(n); return n + 1; };
 **  const f1 = next => n => { console.log('f1'); n = next(n); return n * 2; };
 **  const f2 = next => n => { console.log('f2'); n = next(n); return n * n; };
