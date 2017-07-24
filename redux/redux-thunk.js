@@ -13,6 +13,14 @@ thunk.withExtraArgument = createThunkMiddleware;
 
 export default thunk;
 
+/*
+ *  编写中间件的注意点
+ *  1. 格式 store => next => action => { ... }
+ *  2. 一定要在代码体内调用next(action)，不然中间件没法串联起来
+ *  3. 调用顺序等同递归，next前的代码先调用，next后的代码在next递归调用完全结束后才调用，具体例子及分析见compose部分
+ *     所以next前代码 左 -> 右，next后代码 右 -> 左，整体上以next为分界线，顺序为 左->右->dispatch->右->左
+ */
+
 //把上面函数写出来如下
 function thunkMiddleware(store) {
     return function (next) { //next为前一middleware返回值，利用了闭包和函数式特性，实现连环调用
@@ -21,7 +29,7 @@ function thunkMiddleware(store) {
             * 如dispatch(() => { setTimeout(() => { console.log(0); }, 1000) })
             * 所以当传入dispatch时，就可以异步dipatch(action)
             * dispatch(dispatch => { setTimeout(() => disptach(action), 1000); })
-            * 实际上就是异步时action为函数时，进入代码的action(dispatch)部分
+            * 实际上就是处理异步时，若action为函数，进入代码的action(dispatch)部分
             * 然后在适当时候调用dispatch(action)，进入函数代码另一部分，当然中间件中写法为next(action)
             */
            /*
