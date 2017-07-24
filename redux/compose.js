@@ -45,8 +45,36 @@ export default function compose(...funcs) {
 **  const next = n => n;
 **  f(next)(1); //3
 **  f0  f1  f2
-*
+**
 **  示例代码参见 compose_functional.js
+*/
+
+/*
+**  高阶函数中要注意，如果中间件想在原生dispatch调用前执行，就要写在next(action)之前，若想在原生dispatch调用后执行，
+**  比如logger打印改变后的state，则要写在next(action)之后，这样，递归调用时，dipatch调用返回后才会执行当前代码
+**  const f0 = next => action => { console.log('f0'); next(action); };
+**  const f1 = next => action => { console.log('f1'); next(action); };
+**  const f2 = next => action => { console.log('f2'); next(action); };
+**  const store = createStore(reducer, applyMiddle(f0, f1, f2));
+**  store.dispatch(action);  // f0 f1 f2
+**  
+**  const f0 = next => action => { next(action); console.log('f0'); };
+**  const f1 = next => action => { next(action); console.log('f1'); };
+**  const f2 = next => action => { next(action); console.log('f2'); };
+**  const store = createStore(reducer, applyMiddle(f0, f1, f2));
+**  store.dispatch(action);  // f2 f1 f0
+**
+**  const f0 = next => action => { console.log('f0+'); next(action); console.log('f0-'); };
+**  const f1 = next => action => { console.log('f1+'); next(action); console.log('f1-'); };
+**  const f2 = next => action => { console.log('f2+'); next(action); console.log('f2-'); };
+**  const store = createStore(reducer, applyMiddle(f0, f1, f2));
+**  store.dispatch(action);  // f0+ f1+ f2+ f2- f1- f0-
+**  以next为分界，和递归执行顺序相同，next钱代码递归前执行，next后代码递归调用后执行
+**  即next前的代码为从左往右执行，next后代码为从右往左执行
+**  f0  log('f0+')   ->   next(进入f1)                                                                               log('f0-')
+**  f1                log('f1+')   ->   next(进入f2)                                                log('f1-')     ->返回上层函数f0
+**  f2                              log('f2+')   ->   next(进入dispatch)        log('f2-')    ->    返回上层函数f1
+**                                                    dispatch(action)    ->    返回上层函数f2
 */
 
 

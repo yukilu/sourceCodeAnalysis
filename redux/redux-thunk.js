@@ -25,10 +25,14 @@ function thunkMiddleware(store) {
             * 然后在适当时候调用dispatch(action)，进入函数代码另一部分，当然中间件中写法为next(action)
             */
            /*
-            * 此处当action为function时调用的是store.dispatch，而action为对象是调用的是next
-            * 区别在于store.dispatch为最终加强的dispatch，包含thunk的功能，既能处理函数
-            * 而next为前一middleware返回值，不包含当前thunk功能，即无法处理函数
-            * 若用next替换store.dispatch，则异步处理时，传入的dispatch不会包含thunk功能，造成无法处理函数，会出错
+            * 此处当action为function时调用的是store.dispatch，而action为对象是调用的是next，原因有二
+            * 1. 区别在于store.dispatch为最终加强的dispatch，包含thunk的功能，既能处理函数
+            *    而next为前一middleware返回值，不包含当前thunk功能，即无法处理函数
+            *    若用next替换store.dispatch，则异步处理时，传入的dispatch不会包含thunk功能，造成无法处理函数，会出错
+            * 2. 这个涉及applyMiddleware组件递归调用原理，具体请看applyMiddleware及compose部分，大概简述下
+            *    在applyMiddleware(thunk, ...)中，一般thunk放在最左边，而组件调用顺序为从左往右，所以thunk总是第一个被调用
+            *    当action为函数时，就会进入异步模式，调用函数，然后函数中定义好逻辑，在合适时候再调用dispatch
+            *    当action为对象时，就直接dispatch(action)，而由于中间件的存在，要通过next来递归调用各个中间件
             */
             typeof action === 'function' ? action(store.dispatch, store.getState) : next(action);
         }
