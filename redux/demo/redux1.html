@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>redux</title>
+    <script type="text/javascript" src="../lib/redux.js"></script>
+    <script type="text/javascript">
+        const { createStore, applyMiddleware } = Redux;
+
+        const actions = {
+            increase: () => ({ type: 'INCREASE' }),
+            decrease: () => ({ type: 'DECREASE' })
+        };
+        const thunkMiddleware = store => next => action => typeof action === 'function' ? action(store.dispatch, store.getState) : next(action);
+
+        const store = createStore(reducer, applyMiddleware(thunkMiddleware));
+        store.subscribe(listener);
+
+        store.dispatch(actions.increase());
+        store.dispatch(actions.increase());
+        store.dispatch(actions.increase());
+        store.dispatch(actions.decrease());
+        store.dispatch((dispatch, getState) => {
+            setTimeout(() => {
+                dispatch(actions.decrease());
+            }, 3000);
+        });
+
+        function reducer(state = { counter: 0 }, action) {
+            switch (action.type) {
+                case 'INCREASE':
+                    return { counter: state.counter + 1 };
+                case 'DECREASE':
+                    return { counter: state.counter - 1 };
+                default:
+                    return state;
+            }
+        }
+
+        function listener() {
+            console.log(store.getState());
+        }
+
+    </script>
+</head>
+<body>
+    
+</body>
+</html>
