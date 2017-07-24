@@ -1,13 +1,15 @@
 import { render } from 'react-dom';
 import { Provider } from 'react-redux';
 
-import Counter from './components/Counter';
+import ConnectedCounter from './components/Counter';
 import { store } from './store/counterStore';
 
+//import的ConnectedCounter已经是connected过的，现在将其包一层
 function ConnectedWrap(props) {
-    return <Counter />;
+    return <ConnectedCounter />;
 }
 
+//Provider也包了一层
 function ProviderWrap(props) {
     return (
         <Provider store={store} >
