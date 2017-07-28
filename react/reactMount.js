@@ -84,13 +84,10 @@ class CompositeComponent {
         let renderedElement = null;
         let renderedComponent = null;
 
-        if (isClass(type)) {
-            // type为class时实例化element.type指向的react组件
-            publicInstance = new type(props);
-            // 将props挂载到实例上，就可以在实例中使用this.props访问props
-            publicInstance.props = props;
-            // 调用react组件的实例上的render函数，返回render后的element
-            renderedElement = publicInstance.render();
+        if (isClass(type)) { 
+            publicInstance = new type(props);  // type为class时实例化element.type指向的react组件
+            publicInstance.props = props;  // 将props挂载到实例上，就可以在实例中使用this.props访问props
+            renderedElement = publicInstance.render();  // 调用react组件的实例上的render函数，返回render后的element
         } else if (typeof type === 'function')
             // 当type为普通函数时，直接调用type(props)，得到render的element，因是普通函数，非类，publicInstance不存在，不用设置，前面默认为null
             renderedElement = type(props);

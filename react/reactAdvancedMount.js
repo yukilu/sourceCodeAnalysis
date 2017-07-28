@@ -48,8 +48,7 @@ class CompositeComponent {
         if (isClass(type)) {
             publicInstance = new type(props);
             publicInstance.props = props;
-            // 组件生命周期componentWillMount在此处调用，然后再调用render
-            if (publicInstance.componentWillMount)
+            if (publicInstance.componentWillMount)  // 组件生命周期componentWillMount在此处调用，然后再调用render
                 publicInstance.componentWillMount();
             renderedElement = publicInstance.render();
         } else if (typeof type === 'function') {
@@ -105,8 +104,7 @@ class CompositeComponent {
         let nextRenderedNode = null;
 
         if (isClass(nextType)) {
-            // 生命周期的componentWillUpdate
-            if (publicInstance.componnetWillUpdate)
+            if (publicInstance.componnetWillUpdate)  // 生命周期的componentWillUpdate
                 publicInstance.componentWillUpdate(nextProps);
             // react实例还为原来实例，而实例的props更改为新元素的props，并重新render，返回新的renderedElement
             publicInstance.props = nextProps;
