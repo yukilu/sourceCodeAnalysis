@@ -66,7 +66,7 @@ function isClass(type) {
  * 1. currentElement，即传入的element    { type: A, props: { a: 0 } }
  * 2. publicInstance，实例化element.type指向的react组件    publicInstance = new A(props); publicInstance.props = props;
  * 3. renderedComponent，通过publicInstance.render后的element再实例化的组件
- *    renderedElement = publicInstance.render();  renderedComponent = new instantiateComponent(renderedElement);
+ *    renderedElement = publicInstance.render();  renderedComponent = instantiateComponent(renderedElement);
  */
 class CompositeComponent {
     constructor(element) {
@@ -96,17 +96,22 @@ class CompositeComponent {
             renderedElement = type(props);
 
         // 将上述render得到的element，通过instantiateComponent实例化，因为element.type不定，可能继续是react组件，也可能为DOM组件
-        renderedComponent = new instantiateComponent(renderedElement);
+        renderedComponent = instantiateComponent(renderedElement);
         // 挂载publicInstance到该CompositeComponent上，就可以通过该实例访问到对应的react组件的实例
         this.pulicInstance = publicInstance;
         // 挂载renderedComponent，这样就可以知道当前Component的下一个Component是谁，就可以将结构串起来
         this.renderedComponent = renderedComponent;
 
-        /* 此处类似于递归，并且是个尾递归，返回值为renderedComponent.mount()值，若renderedComponet还为CompositeComponent时，则会进入
-         * 下个CompositeComponent的mount函数，继续当前函数中的操作，根据element.type创建publicInstance，然后再根据publicInstance.render()的element
-         * 创建renderedComponent，一直如此...直到进入DOMComponent.mount()，返回值为node，然后逐层返回，最后各CompositeComponent
-         * 的返回值都为该node，包括当前CompositeComponent的返回值
-         * 
+        /* 此处类似于递归，并且是个尾递归
+         * 若假设当前组件为rootComponent,则在mountTree中渲染时，rootComponent.mount()启动，执行rootComponent.renderedComponent.mount()
+         * 继续执行rootComponent.renderedComponent.renderedComponent.mount()... 层层mount下去，直到到达DOMComponent时返回node
+         * unmount, receive及getHostNode函数原理同上
+         *
+         * 渲染示意图
+         * rtC = rootComponent, rC = renderedComponent, m = mount
+         * CC = CompositeComponent, DOMC = DOMComponent
+         * rtC.m() -> rtC.rC.m() -> rtC.rC.rC.m() -> rtC.rC.rC.rC.m() -> ... -> rtC.rc...rc.m() => node
+         * CC             CC               CC                  CC        CC              DOMC   =  node
          */
         return renderedComponent.mount();
     }
@@ -170,7 +175,7 @@ class DOMComponent {
 }
 
 function mountTree(element, containerNode) {
-    const rootComponent = new instantiateComponent(element);
+    const rootComponent = instantiateComponent(element);
     // 根组件的mount函数，触发了其下各层子组件的mount()，形成了层级，并处理了各react组件或DOM组件，最终返回了DOM根节点
     const rootNode = rootComponent.mount();
 

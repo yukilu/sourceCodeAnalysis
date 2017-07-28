@@ -43,7 +43,7 @@ class CompositeComponent {
         } else if (typeof type === 'function')
             renderedElement = type(props);
 
-        renderedComponent = new instantiateComponent(renderedElement);
+        renderedComponent = instantiateComponent(renderedElement);
         this.pulicInstance = publicInstance;
         this.renderedComponent = renderedComponent;
 
@@ -95,7 +95,7 @@ class DOMComponent {
 }
 
 function mountTree(element, containerNode) {
-    const rootComponent = new instantiateComponent(element);
+    const rootComponent = instantiateComponent(element);
     const rootNode = rootComponent.mount();
     console.log(rootComponent);
 
