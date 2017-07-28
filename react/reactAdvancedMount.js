@@ -76,7 +76,6 @@ class CompositeComponent {
             publicInstance.componentWillUnmount();
 
         renderedComponent.unmount();
-
     }
 
     /* 合成组件，prevElement.type === nextElement.type时，调用receive函数，该函数有两个作用
@@ -133,7 +132,6 @@ class CompositeComponent {
         // 用新节点替换旧节点
         prevRenderedNode.parentNode.replaceChild(nextRenderedNode, prevRenderedNode);
     }
-
 }
 
 class DOMComponent {

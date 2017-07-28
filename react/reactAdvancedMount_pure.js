@@ -69,7 +69,6 @@ class CompositeComponent {
             publicInstance.componentWillUnmount();
 
         renderedComponent.unmount();
-
     }
 
     receive(nextElement) {
@@ -108,7 +107,6 @@ class CompositeComponent {
 
         prevRenderedNode.parentNode.replaceChild(nextRenderedNode, prevRenderedNode);
     }
-
 }
 
 class DOMComponent {
