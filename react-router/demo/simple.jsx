@@ -14,6 +14,14 @@
     </div>
 </BrowserRouter>
 
+/* 作用的整个过程为
+ * 1. BrowserRouter将history传入返回的Router中，在Router中，对history的变化进行了监听，当history的路径变化时，
+ * 就触发setState，重新渲染整个Router组件树
+ * 2. Link组件返回的实际为a链接，当点击a链接时，就会根据Link的to的路径值来改变当前history，从而触发上述监听函数
+ * 重新渲染整个Router组件树
+ * 3.Router组件树重新渲染时，所有Route组件都被重新渲染，而Route组件会根据当前路径的不同，渲染出不同的组件
+ */
+
 //来看BrowserRouter, Link, Route简化代码
 
 // BrowserRouter自己创建了一个history并传入Router中
@@ -26,43 +34,20 @@ class BrowserRouter extends React.Component {
 }
 
 class Router extends React.Component {
-  static contextTypes = { router: PropTypes.object };   // 定义contextTypes，以此来访问this.context
-
-  /* 定义 childContextTypes，以此来向子组件传递context，由于对象属性相同，都为router，子组件使用context时，这个Router的context
-   * 会覆盖之前的context.router，下面定义的getChildContext可看出，这里是用history及route覆盖了原来router中的同名属性，然后往下传递
-   */
-  static childContextTypes = { router: PropTypes.object.isRequired };
-
-  getChildContext() {
-    return {
-      router: {
-        ...this.context.router,
-        history: this.props.history,
-        route: { location: this.props.history.location, match: this.state.match }
-      }
-    };
-  }
+  // 此处省略了静态变量contextTypes和childContextTypes，函数getChildContext，computeMatch和componentWillUnmonut
 
   state = { match: this.computeMatch(this.props.history.location.pathname) };   // 定义了初始state
-
-  computeMatch(pathname) {
-    return { path: '/', url: '/', params: {}, isExact: pathname === '/' };
-  }
 
   componentWillMount() {
     const { children, history } = this.props;
 
     /* 此处是关键的一环，对history进行了监听，若history发生变化，则会改变match并重新渲染整个路由组件
      * Link组件最后返回的是a标签，当点击a时，会调用history.push(to)来改变history，从而在这里触发监听函数，
-     * 通过setState({ match })来重新渲染整个路由
+     * 通过setState({ match })来重新渲染整个Router树
      */
     this.unlisten = history.listen(() => {
       this.setState({ match: this.computeMatch(history.location.pathname) });
     });
-  }
-
-  componentWillUnmount() {
-    this.unlisten();  // unmount时，移除监听
   }
 
   render() {
@@ -72,8 +57,7 @@ class Router extends React.Component {
 }
 
 class Link extends React.Component {
-  // 获取 this.context，这里省略了具体的值，主要是指router中有history，history中的要有push,replace,createHref函数
-  static contextTypes = { /*...*/ };
+  // 此处省略contextTypes
 
   // 处理点击事件
   handleClick = (event) => {
@@ -106,26 +90,9 @@ class Link extends React.Component {
 
 class Route extends React.Component {
 
-  // 此处contextTypes和childContextTypes和Router中情况一下
-  static contextTypes = { router: ... };
-
-  static childContextTypes = { router: PropTypes.object.isRequired };
-
-  getChildContext() {
-    return {
-      router: {
-        ...this.context.router,
-        route: {
-          location: this.props.location || this.context.router.route.location,
-          match: this.state.match
-        }
-      }
-    };
-  }
+  // 此处省略静态变量contextTypes和childContextTypes，getChildContext函数和computeMatch函数
 
   state = { match: this.computeMatch(this.props, this.context.router) };
-
-  computeMatch({ computedMatch, location, path, strict, exact }, router) { /* ... */ }
 
   componentWillReceiveProps(nextProps, nextContext) {
     this.setState({ match: this.computeMatch(nextProps, nextContext.router) });

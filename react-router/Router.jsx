@@ -1,6 +1,13 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
+/* 作用的整个过程为
+ * 1. 在Router中，对history的变化进行了监听，当history的路径变化时，就触发setState，重新渲染整个Router组件树
+ * 2. Link组件返回的实际为a链接，当点击a链接时，就会根据Link的to的路径值来改变当前history，从而触发上述监听函数
+ * 重新渲染整个Router组件树
+ * 3.Router组件树重新渲染时，所有Route组件都被重新渲染，而Route组件会根据当前路径的不同，渲染出不同的组件
+ */
+
 class Router extends React.Component {
   static propTypes = { history: PropTypes.object.isRequired, children: PropTypes.node };
 
@@ -35,7 +42,7 @@ class Router extends React.Component {
 
     /* 此处是核心代码，对history进行了监听，若history发生变化，则会改变match并重新渲染整个路由组件
      * Link组件最后返回的是a标签，当点击a时，会调用history.push(to)来改变history，从而在这里触发监听函数，
-     * 通过setState({ match })来重新渲染整个路由，此时，由于路径的变化，会引起Route组件渲染的子组件的变化
+     * 通过setState({ match })来重新渲染整个组件树，此时，由于路径的变化，会引起Route组件渲染的子组件的变化
      * 从而来达到单页面应用不同路径对应不同组件的效果
      */
     this.unlisten = history.listen(() => {
