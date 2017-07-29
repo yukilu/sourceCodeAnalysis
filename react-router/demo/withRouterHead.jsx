@@ -7,7 +7,8 @@ import Counter from './components/Count';
 import { store, mapStateToProps, mapDispatchToProps } from './store/countStore';
 
 /* connect在Router之前，无影响，即connect包裹的组件已经包含了整个Router组件树，所以Route的重新渲染不会受到connect的影响
- * Provider -> connect -> Router -> Route
+ * connect -> Router -> Route
+ * Provider位置只有一种情况，在最前面  Provider -> connect -> Router -> Route
  * 只要没有connect在Router和Route中间就不会影响重新渲染Router组件树时Route的重新渲染
  */
 function Wrap(props) {
@@ -31,6 +32,7 @@ function Wrap(props) {
 const ConnectedWrap = connect(mapStateToProps, mapDispatchToProps)(Wrap);
 
 // Rrovider只有一种情况，就是在最外面
+// Provider -> connect -> Router -> Route
 render(
     <Provider store={store}>
         <ConnectedWrap />

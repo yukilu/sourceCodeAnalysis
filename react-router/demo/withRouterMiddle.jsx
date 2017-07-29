@@ -6,7 +6,11 @@ import { BrowserRouter as Router, Route, Link, withRouter } from 'react-router-d
 import Counter from './components/Count';
 import { store, mapStateToProps, mapDispatchToProps } from './store/countStore';
 
-// connect位于Router与Route中间时，会影响，需要用withRouter对connected组件进行强制刷新
+/* connect位于Router与Route中间时，会影响，需要用withRouter对connected组件进行强制刷新
+ * Router -> connect -> Route
+ * Provider位置有两种情况，无影响
+ * Provider -> Router -> connect -> Route  ||  Router -> Provider -> connect -> Route
+ */
 function Wrap(props) {
      const { count, increase, decrease } = props;
      return (
@@ -34,7 +38,7 @@ const ConnectedWrap = withRouter(connect(mapStateToProps, mapDispatchToProps)(Wr
  * 从而重新渲染Router组件树，Route也根据具体路径重新渲染对应组件
  */
 
-// Provider -> Router -> connect -> Route 
+// 1. Provider -> Router -> connect -> Route 
 render(
     <Provider store={store}>
         <Router>
@@ -44,7 +48,7 @@ render(
     document.getElementById('root')
 );
 
-// Router -> Provider -> connect -> Route
+// 2. Router -> Provider -> connect -> Route
 render(
     <Router>
         <Provider store={store}>

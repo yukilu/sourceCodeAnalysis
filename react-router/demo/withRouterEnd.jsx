@@ -6,8 +6,12 @@ import { BrowserRouter as Router, Route, Link, withRouter } from 'react-router-d
 import Counter from './components/Count';
 import { store, mapStateToProps, mapDispatchToProps } from './store/countStore';
 
-// connect位于Route之后，无影响，即connected组件为Route中component属性值
-// 只要没有connect在Router和Route中间就不会影响重新渲染Router组件树时Route的重新渲染
+/* connect位于Route之后，无影响，即connected组件为Route中component属性值
+ * Router -> Route -> connect
+ * Provider位置有3种情况，无影响
+ * Provider -> Router -> Route -> connect || Router -> Provider -> Route -> connect || Router -> Route -> Provider -> connect
+ * 只要没有connect在Router和Route中间就不会影响重新渲染Router组件树时Route的重新渲染
+ */
 const ConnectedCounter = connect(mapStateToProps, mapDispatchToProps)(Counter);
 
 function Wrap(props) {
