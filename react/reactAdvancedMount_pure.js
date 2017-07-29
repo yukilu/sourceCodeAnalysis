@@ -90,8 +90,6 @@ class CompositeComponent {
         let nextRenderedComponent = null;
         let nextRenderedNode = null;
 
-        // console.log(nextType);
-
         if (isClass(nextType)) {
             if (publicInstance.componentWillUpdate)
                 publicInstance.componentWillUpdate(nextProps);
@@ -172,8 +170,6 @@ class DOMComponent {
         const prevProps = this.currentElement.props;
         const nextProps = nextElement.props;
 
-        // console.log(this.currentElement, nextElement);
-
         this.currentElement = nextElement;
 
         Object.keys(prevProps).forEach(propName => {
@@ -192,8 +188,6 @@ class DOMComponent {
         let nextChildren = nextProps.children || [];
         if (!Array.isArray(nextChildren))
             nextChildren = [nextChildren];
-
-        // console.log(prevChildren, nextChildren);
 
         const prevChildComponents = this.childComponents;
         const nextChildComponents = [];
@@ -294,8 +288,6 @@ function mountTree(element, containerNode) {
     containerNode.appendChild(rootNode);
 
     const publicInstance = rootComponent.getPublicInstance();
-
-    // console.log(rootComponent);
     return publicInstance;
 }
 
