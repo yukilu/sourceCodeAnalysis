@@ -34,7 +34,7 @@ class BrowserRouter extends React.Component {
 }
 
 class Router extends React.Component {
-  // 此处省略了静态变量contextTypes和childContextTypes，函数getChildContext，computeMatch和componentWillUnmonut
+  // 此处省略了静态变量contextTypes和childContextTypes，函数getChildContext，computeMatch和componentWillUnmonut(移除history监听事件)
 
   state = { match: this.computeMatch(this.props.history.location.pathname) };   // 定义了初始state
 
@@ -60,7 +60,7 @@ class Link extends React.Component {
   // 此处省略contextTypes
 
   // 处理点击事件
-  handleClick = (event) => {
+  handleClick = event => {
     // Link中若传入了onClick函数，则先调用
     if (this.props.onClick)
       this.props.onClick(event);
@@ -94,6 +94,7 @@ class Route extends React.Component {
 
   state = { match: this.computeMatch(this.props, this.context.router) };
 
+  // 重新渲染时，将match重新计算，并通过setState设置
   componentWillReceiveProps(nextProps, nextContext) {
     this.setState({ match: this.computeMatch(nextProps, nextContext.router) });
   }

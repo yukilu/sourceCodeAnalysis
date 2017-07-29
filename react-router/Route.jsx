@@ -56,6 +56,7 @@ class Route extends React.Component {
     return path ? matchPath(pathname, { path, strict, exact }) : route.match;
   }
 
+  // 重新渲染时，将match重新计算，并通过setState设置
   componentWillReceiveProps(nextProps, nextContext) {
     this.setState({ match: this.computeMatch(nextProps, nextContext.router) });
   }
