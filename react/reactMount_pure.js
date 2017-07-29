@@ -5,6 +5,9 @@ function createElement(type, props) {
     return { type, props };
 }
 
+class Component { }
+Component.isClass = true;
+
 function instantiateComponent(element) {
     const type = element.type;
     if (typeof type === 'function')

@@ -5,6 +5,9 @@ function createElement(type, props) {
     return { type, props };
 }
 
+class Component { }
+Component.isClass = true;
+
 function instantiateComponent(element) {
     const type = element.type;
     if (typeof type === 'function')
@@ -55,7 +58,7 @@ class CompositeComponent {
         }
 
         renderedComponent = instantiateComponent(renderedElement);
-        this.pulicInstance = publicInstance;
+        this.publicInstance = publicInstance;
         this.renderedComponent = renderedComponent;
 
         return renderedComponent.mount();
@@ -72,11 +75,12 @@ class CompositeComponent {
     }
 
     receive(nextElement) {
-        const prevProps = this.currentElement.props;
         const publicInstance = this.publicInstance;
+
+        const prevProps = this.currentElement.props;
         const prevRenderedComponent = this.renderedComponent;
         const prevRenderedElement = prevRenderedComponent.currentElement;
-        const prevRenderedNode = null;
+        let prevRenderedNode = null;
 
         this.currentElement = nextElement;
         const nextType = nextElement.type;
@@ -86,13 +90,15 @@ class CompositeComponent {
         let nextRenderedComponent = null;
         let nextRenderedNode = null;
 
+        // console.log(nextType);
+
         if (isClass(nextType)) {
-            if (publicInstance.componnetWillUpdate)
+            if (publicInstance.componentWillUpdate)
                 publicInstance.componentWillUpdate(nextProps);
             publicInstance.props = nextProps;
             nextRenderedElement = publicInstance.render();
         } else if (typeof nextType === 'function')
-            nextRenderedElement = nextType(props);
+            nextRenderedElement = nextType(nextProps);
 
         if (nextRenderedElement.type === prevRenderedElement.type) {
             prevRenderedComponent.receive(nextRenderedElement);
@@ -146,11 +152,7 @@ class DOMComponent {
         childComponents = children.map(instantiateComponent);
         this.childComponents = childComponents;
 
-        childNodes = childComponents.map(childComponent => {
-            const mountNode = childComponent.mount();
-            childComponent.mountNode = mountNode;
-            return mountNode; 
-        });
+        childNodes = childComponents.map(childComponent => childComponent.mount());
         childNodes.map(childNode => {
             node.appendChild(childNode);
         });
@@ -170,6 +172,8 @@ class DOMComponent {
         const prevProps = this.currentElement.props;
         const nextProps = nextElement.props;
 
+        // console.log(this.currentElement, nextElement);
+
         this.currentElement = nextElement;
 
         Object.keys(prevProps).forEach(propName => {
@@ -188,6 +192,8 @@ class DOMComponent {
         let nextChildren = nextProps.children || [];
         if (!Array.isArray(nextChildren))
             nextChildren = [nextChildren];
+
+        // console.log(prevChildren, nextChildren);
 
         const prevChildComponents = this.childComponents;
         const nextChildComponents = [];
@@ -226,7 +232,7 @@ class DOMComponent {
 
                 nextChildComponents.push(nextChildComponent);
 
-                operationQueue.push({ type: 'REPALCE', prevNode, nextNode });  
+                operationQueue.push({ type: 'REPLACE', prevNode, nextNode });  
                 continue;
             }
 
@@ -288,6 +294,8 @@ function mountTree(element, containerNode) {
     containerNode.appendChild(rootNode);
 
     const publicInstance = rootComponent.getPublicInstance();
+
+    // console.log(rootComponent);
     return publicInstance;
 }
 

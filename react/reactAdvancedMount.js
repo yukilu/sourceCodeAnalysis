@@ -5,6 +5,9 @@ function createElement(type, props) {
     return { type, props };
 }
 
+class Component { }
+Component.isClass = true;
+
 function instantiateComponent(element) {
     const type = element.type;
     if (typeof type === 'function')
@@ -57,7 +60,7 @@ class CompositeComponent {
         }
 
         renderedComponent = instantiateComponent(renderedElement);
-        this.pulicInstance = publicInstance;
+        this.publicInstance = publicInstance;
         this.renderedComponent = renderedComponent;
 
         return renderedComponent.mount();
@@ -91,7 +94,7 @@ class CompositeComponent {
         const prevProps = this.currentElement.props;
         const prevRenderedComponent = this.renderedComponent;
         const prevRenderedElement = prevRenderedComponent.currentElement;
-        const prevRenderedNode = null;
+        let prevRenderedNode = null;
 
         // 挂载新的element，其实type相同，只有props不同
         this.currentElement = nextElement;
@@ -102,14 +105,15 @@ class CompositeComponent {
         let nextRenderedComponent = null;
         let nextRenderedNode = null;
 
+        // 判断即将更新的元素的type为class或普通函数
         if (isClass(nextType)) {
-            if (publicInstance.componnetWillUpdate)  // 生命周期的componentWillUpdate
+            if (publicInstance.componentWillUpdate)  // 生命周期的componentWillUpdate
                 publicInstance.componentWillUpdate(nextProps);
             // react实例还为原来实例，而实例的props更改为新元素的props，并重新render，返回新的renderedElement
             publicInstance.props = nextProps;
             nextRenderedElement = publicInstance.render();
         } else if (typeof nextType === 'function')
-            nextRenderedElement = nextType(props);
+            nextRenderedElement = nextType(nextProps);
 
         /* 新旧renderedElement的type相同时，继续调用prevRenderedComponent.receive(nextRenderedElement)，以此实现层层往下调用receive
          * 但是注意，千万不要通过判断prevPros === nextProps相同时，就不调用receive函数，这样会造成receive无法层层调用
@@ -266,7 +270,7 @@ class DOMComponent {
 
                 nextChildComponents.push(nextChildComponent);   // 添加新增的组件实例
 
-                operationQueue.push({ type: 'REPALCE', prevNode, nextNode });   // 操作队列中添加操作替换 REPLACE，对应node.replace(newNode, oldNode)
+                operationQueue.push({ type: 'REPLACE', prevNode, nextNode });   // 操作队列中添加操作替换 REPLACE，对应node.replace(newNode, oldNode)
                 continue;
             }
 

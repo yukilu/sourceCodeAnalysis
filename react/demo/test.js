@@ -1,13 +1,37 @@
 function A(props) {
-    return createElement(B, { a: 0 });
+    return createElement(B, { a: props.a });
 }
 
-class B {
+class B extends Component {
     render() {
-        return createElement('div', { a: this.props.a, children: [createElement('span'), createElement('a')] });
+        const a = this.props.a;
+        let children = null;
+        if (!a)
+            children = [createElement('span'), createElement(C, { b: a })];
+        else
+            children = [createElement('span'), createElement(C, { b: a })];
+        return createElement('div', { a, children });
     }
 }
 
-B.isClass = true;
+function C(props) {
+    return createElement(D, { b: props.b });
+}
 
-mountTree(createElement(A), document.getElementById('root'));
+class D extends Component {
+    render() {
+        const b = this.props.b;
+        if (!b)
+            return createElement('h3');
+        else
+            return createElement('p');
+    }
+}
+
+const containerNode = document.getElementById('root');
+
+mountTree(createElement(A, { a: 0 }), containerNode);
+
+setTimeout(() => {
+    mountTree(createElement(A, { a: 1 }), containerNode);
+}, 3000);

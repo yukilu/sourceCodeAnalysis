@@ -1,12 +1,21 @@
 // 实现react主要功能的简易代码，并能追溯各Component的子组件
 
-// 创建element的代码，形如 { type: A, props: { propName: propKey } }，{ type: 'div', props: { propName: propKey } }
+/* 仿照React.createElement定义创建element的函数
+ * 返回值形如 { type: A, props: { propName: propKey } }，{ type: 'div', props: { propName: propKey } }
+ */
 function createElement(type, props) {
     if (!props)
         props = {};
 
     return { type, props };
 }
+
+/* 仿照React.Component定义一个Component，es6的中的类继承时，会继承两种属性
+ * 1. 原型对象上的方法及属性  Component.prototype  如Component.prototype.a
+ * 2. 挂载在函数上的静态变量  Component            如Component.b
+ */
+class Component { }
+Component.isClass = true;
 
 /* 实例化Component函数，element可分为两类
  * 1. type为function(es6的class只是语法糖，本质也是function)，即为react组件
