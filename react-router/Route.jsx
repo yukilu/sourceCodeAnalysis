@@ -69,7 +69,16 @@ class Route extends React.Component {
     const props = { match, location, history, staticContext };
 
     /* 这里是核心代码，当路径不同时，match的值也不同，重新渲染Route时得到的组件就不同
-     * 可以看到渲染优先级 component > render > children
+     * 使用示例如下
+     * 1) component    <Route path= '/a' component={SomeComponent} />
+     * 2) render       <Route path='/' render={props => <h2>Home</h2>} />
+     * 3) children     <Route path='/b' children={props => <SomeComponent propName={propKey} />} />
+     *              or <Route path='/b'><SomeComponent propName={propKey} /></Route>
+     *
+     * component,render,children三个属性区别:
+     * 1. 优先级 component > render > children
+     * 2. 当为component和render时，匹配到对应path才会渲染对应组件，而children正如注释所说，不论path值，会一直渲染
+     *    可以自己设定children为一个函数或者放在<Route></Route>标签内，为其props.children，且是唯一子组件
      */
     return (
       component ? ( // component prop gets first priority, only called if there's a match
