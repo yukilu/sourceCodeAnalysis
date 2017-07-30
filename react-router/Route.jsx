@@ -86,10 +86,10 @@ class Route extends React.Component {
       ) : render ? ( // render prop is next, only called if there's a match
         match ? render(props) : null
       ) : children ? ( // children come last, always called
-        typeof children === 'function' ? (
+        typeof children === 'function' ? ( // children为函数时，children优先级最低，但总会被渲染
           children(props)
-        ) : !isEmptyChildren(children) ? (
-          React.Children.only(children)
+        ) : !isEmptyChildren(children) ? ( // children不是函数，而是Route子组件时，即为<Route><A/></Route>这种情况时
+          React.Children.only(children) // 渲染唯一子组件
         ) : (
           null
         )
