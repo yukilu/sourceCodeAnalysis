@@ -2,7 +2,7 @@ import { Component } from 'react';
 import { render } from 'react-dom';
 import { BrowserRouter as Router, Route, Link } from 'react-router-dom';
 
-// Route中不存在component和render时，只有children
+// Route中不存在component和render时，只有children，这时候，不论path值，children总是会被渲染
 // children为函数
 render(
     <Router>
