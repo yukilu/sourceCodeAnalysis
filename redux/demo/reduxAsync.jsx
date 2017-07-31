@@ -42,7 +42,7 @@ import { Provider, connect } from 'react-redux';
  *  当然实际调用顺序不是这样的，这里只是示意一个异步调用的过程
  */
 
-// 用getMsg模仿重后台异步获取数据
+// 用getMsg模仿后台异步获取数据
 function getMsg(url) {
     return new Promise(function(resolve, reject) {
         setTimeout(() => {
@@ -106,6 +106,24 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
     return bindActionCreators(actions, dispatch);
+
+ /* return {
+  *   get: msg => { dispatch(actions.get(msg)); },
+  *   getAsync: ev => { dispatch(actions.getAsync(ev)); }
+  * };
+  *
+  * return {
+  *   get: msg => dispatch(actions.get(msg)),
+  *   // 可以减少一层dispatch(fn)，直接执行以下代码
+  *   getAsync: ev => {
+  *     getMsg(ev && ev.target.innerHTML).then(msg => {
+            dispatch(actions.get(msg));
+        }, err => {
+            console.log(err);
+        });
+  *   }
+  * };
+  */
 }
 
 @connect(mapStateToProps, mapDispatchToProps)
