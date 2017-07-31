@@ -4,16 +4,12 @@ import { Provider } from 'react-redux';
 import ConnectedCounter from './components/Counter';
 import { store } from './store/counterStore';
 
-//import的ConnectedCounter已经是connected过的，现在将其包一层
-function ConnectedWrap(props) {
-    return <ConnectedCounter />;
-}
-
-//Provider也包了一层
+//将Provider包裹了一层，Provider不需要在最外层，只需要在Connected组件外层就可以，也不用紧密连接，结构如下
+// ... -> Provider -> ... -> Connected -> ...
 function ProviderWrap(props) {
     return (
         <Provider store={store} >
-            <ConnectedWrap />
+            <ConnectedCounter />
         </Provider>
     );
 }
