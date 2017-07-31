@@ -71,10 +71,10 @@ export default function compose(...funcs) {
 **  store.dispatch(action);  // f0+ f1+ f2+ f2- f1- f0-
 **  以next为分界，和递归执行顺序相同，next钱代码递归前执行，next后代码递归调用后执行
 **  即next前的代码为从左往右执行，next后代码为从右往左执行
-**  f0  log('f0+')   ->   next(进入f1)                                                                               log('f0-')
-**  f1                log('f1+')   ->   next(进入f2)                                                log('f1-')     ->返回上层函数f0
-**  f2                              log('f2+')   ->   next(进入dispatch)        log('f2-')    ->    返回上层函数f1
-**                                                    dispatch(action)    ->    返回上层函数f2
+**  f0  log('f0+')  ->  next(进入f1)                                                                                        log('f0-')
+**  f1                  log('f1+')   ->   next(进入f2)                                                   log('f1-')     ->  返回上层函数f0
+**  f2                                    log('f2+')   ->   next(进入dispatch)       log('f2-')     ->   返回上层函数f1
+**                                                          dispatch(action)    ->   返回上层函数f2
 */
 
 
