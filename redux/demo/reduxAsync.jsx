@@ -107,14 +107,15 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
     return bindActionCreators(actions, dispatch);
 
- /* return {
+ /* 以上效果和下面两种写法相同，其中和下面第一种完全相同，和第二种不同，第二种少了一层dispatch(fn)
+  * return {
   *   get: msg => { dispatch(actions.get(msg)); },
   *   getAsync: ev => { dispatch(actions.getAsync(ev)); }
   * };
   *
   * return {
   *   get: msg => dispatch(actions.get(msg)),
-  *   // 可以减少一层dispatch(fn)，直接执行以下代码
+  *   // 可以减少一层dispatch(fn)，直接将fn中的代码放入mapDispatch中的getAsync函数
   *   getAsync: ev => {
   *     getMsg(ev && ev.target.innerHTML).then(msg => {
             dispatch(actions.get(msg));
