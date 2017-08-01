@@ -1,3 +1,5 @@
+// 去除了一些错误处理，以及observable函数
+
 export const ActionTypes = {
   INIT: '@@redux/INIT'
 }
