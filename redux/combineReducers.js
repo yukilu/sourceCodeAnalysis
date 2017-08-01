@@ -1,5 +1,8 @@
 /* 简化了代码，把错误处理都去除了
  *
+ * combineReducers() 所做的只是生成一个函数，这个函数来调用你的一系列 reducer，每个 reducer 根据它们的 key 来筛选
+ * 出 state 中的一部分数据并处理，然后这个生成的函数再将所有 reducer 的结果合并成一个大的对象。没有任何魔法。
+ *
  * 假设有函数a,b,c分别处理state中对应的a,b,c变量
  * 函数a处理state.a变量
  * function a(stateA, action) {
