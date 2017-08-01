@@ -1,4 +1,29 @@
-//简化了代码，把错误处理都去除了
+/* 简化了代码，把错误处理都去除了
+ *
+ * 假设有函数a,b,c分别处理state中对应的a,b,c变量
+ * 函数a处理state.a变量
+ * function a(stateA, action) {
+ *     switch (action.type) {
+ *         case 'INCREASE':
+ *             return stateA + 1;
+ *         case 'DECREASE':
+ *             return stateA - 1;
+ *         default:
+ *             return stateA;
+ *     }
+ * }
+ * 函数b,c分别处理state.b,state.c
+ * 
+ * const reducers = { a, b, c }
+ * const reducer = combineReducers(reducers)的执行过程类似于如下函数(具体的combine函数复杂些，会做些错误处理和性能优化)
+ * function reducer(state={}, action) {
+ *     return {
+ *         a: reducers.a(state.a, action),
+ *         b: reducers.b(state.b, action),
+ *         c: reducers.c(state.c, action)
+ *     };
+ * }
+ */
 
 export default function combineReducers(reducers) {
   const reducerKeys = Object.keys(reducers)
