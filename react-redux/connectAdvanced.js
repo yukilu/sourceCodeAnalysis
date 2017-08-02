@@ -1,5 +1,4 @@
 import hoistStatics from 'hoist-non-react-statics'
-import invariant from 'invariant'
 import { Component, createElement } from 'react'
 
 import Subscription from '../utils/Subscription'

@@ -40,13 +40,19 @@ const store = {
     state: {},
     listeners : [],
     // 监听函数时将需要监听的函数添加到listeners数组中，在dispatch中会遍历listeners数组，逐个调用
-    listen : function (listener) {
+    subscribe : function (listener) {
         if (typeof listener !== 'function')
             return;
         const listeners = this.listeners;
         listeners.push(listener);
+        
+        let isCleared = false;
         // 返回值是个函数，调用这个函数，会将上面添加的函数从监听数组中删除
         return function () {
+            if (isCleared)
+                return;
+            isCleared = true;
+
             for (let i = 0; i < listeners.length; i++)
                 if (listeners[i] === listener) {
                     listeners.splice(i, 1);
