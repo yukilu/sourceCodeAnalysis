@@ -2,19 +2,26 @@ import { Component } from 'react';
 import { render } from 'react-dom';
 import { createStore } from 'redux';
 import { Provider, connect } from 'react-redux';
-import PropTypes from 'prop-types';
 
-/* 把Provider进行了嵌套，并传了不同的store进去，是相互独立运行的
- * 同时说明内层的Provider的store会覆盖外层Provider的store
- * 这是因为context的机制，内层设置context属性时候，同名变量会覆盖外层，而Provider都是将store挂载到context上
+/* 2 Provider + 2 connect  Provider嵌套，两个Provider之间有connect，外层connect和内层Provider平行
+ * Provider -> connect + Provider(connect)
+ * 这里外层connect连接的是外层Provider，内层connect连接的是内层Provider，内层屏蔽了外层
+ * store === anotherStore为true，连接的都是store，会互相影响，此处就省略了，演示了连接不同store时候的情况
+ * 
+ * <Provider store={store}>
+ *     <div>
+ *         <ConnectedA/>
+ *         <Provider store={anotherStore}>
+ *             <ConnectedB/>
+ *         </Provider>
+ *     </div>
+ * </Provider>
  */
+
 function reducer(state = { count: 0 }, action) {
-    const count = state.count;
     switch (action.type) {
         case 'INCREASE':
-            return { count: count + 1 };
-        case 'DECREASE':
-            return { count: count - 1 };
+            return { count: state.count + 1 };
         default:
             return state;
     }
@@ -29,21 +36,20 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
     return {
-        increase: () => dispatch({ type: 'INCREASE' }),
-        decrease: () => dispatch({ type: 'DECREASE' })
+        increase: ev => dispatch({ type: 'INCREASE' })
     };
 }
 
 @connect(mapStateToProps, mapDispatchToProps)
 class Counter extends Component {
     render() {
-        const { name, count, increase, decrease } = this.props;
+        const { name, count, increase, children } = this.props;
         return (
             <div>
-                <h2>Counter{name}</h2>
+                <h3>Counter{name}</h3>
                 <p>{count}</p>
-                <button onClick={increase}>INCREASE</button><br/>
-                <button onClick={decrease}>DECREASE</button>
+                <button onClick={increase}>INCREASE</button>
+                {children}
             </div>
         );
     }
