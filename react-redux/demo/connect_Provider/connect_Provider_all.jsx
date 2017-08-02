@@ -1,9 +1,10 @@
-// Provider和connect所有关系
+// Provider和connect所有关系，所有对应示例见connect_Provider_n.m.jsx
 
 /* 规律总结
- * 1. Connected组件间可以相互嵌套，Connected组件与Provider也可以相互嵌套，不会有什么问题
- * 2. Connected组件连接的store总是上层组件中最近的那个Provider传入的store
- * 3. Connected组件连接的store相同时，若监听的是同一个属性，会互相影响，其他情况(监听不同属性，连接不同store)不会影响
+ * 1. Connected组件间可以相互嵌套，Provider组件间也可以嵌套，Connected与Provider也可以相互嵌套，不会有什么问题
+ * 2. 由于context机制问题，内层Provider会屏蔽外层Provider的store，Connected组件连接的store总是上层组件中最近的那个Provider传入的store
+ * 3. Connected组件连接的store相同时，可能会互相影响，连接不同store时是互相独立的。store相同时，监听相同属性会互相影响
+ *监听不同属性时，若一个组件更改了另一个组件监听的属性，也会引起另一个组件重新渲染
  */
 
 /* Provider的定义中，渲染的为props.children，所以渲染<Provider><Connected/></Provider>时，会继续渲染Connected组件
@@ -193,20 +194,24 @@
 // 4.2.2.1.1 store相同
 // Provider(store) -> connect + Proivder(store)
 <Provider store={store}>
-    <ConnectedA/>
-    <Provider store={store}>
-        <ConnectedB/>
-    </Provider>
+    <div>
+        <ConnectedA/>
+        <Provider store={store}>
+            <ConnectedB/>
+        </Provider>
+    </div>
 </Provider>
 // 因为连接了同一个store，会互相影响
 
 // 4.2.2.1.2 store不同
 // Provider(store) -> connect + Proivder(anotherStore)
 <Provider store={store}>
-    <ConnectedA/>
-    <Provider store={anotherStore}>
-        <ConnectedB/>
-    </Provider>
+    <div>
+        <ConnectedA/>
+        <Provider store={anotherStore}>
+            <ConnectedB/>
+        </Provider>
+    </div>
 </Provider>
 // A连接了store，而对于B来说有两个Provier，内层的屏蔽了外层的，所以连接的是内层Provider的anotherStore
 // 由于连接的store不同，互不影响
