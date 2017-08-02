@@ -8,6 +8,7 @@ import defaultSelectorFactory from './selectorFactory'
 /* connect函数作用:
  * 1. 将state上对应属性和一些dispatch操作map进被连接组件内
  * 2. 监听map进原组件内的属性在state上对应的属性的变化，若值改变，就重新渲染connected组件树
+ *    实现代码为store.subscribe(this.onStateChange)
  * 
  * connect函数起到了将redux里store中state上的属性值传入组件并在值更新时触发重新渲染
  * 而且将store.dispatch操作传入组件内，真正起到了连接redux和react的作用
