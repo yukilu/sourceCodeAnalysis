@@ -71,7 +71,7 @@ export function combineReducers(reducers) {
     };
 }
 
-// 使用方法及示例见createReducer.js
+// 用来生成小reducer，替代switch的判断方式，示例见createReducer.js
 export function createReducer(initialState, handlers) {
     return function (state = initialState, action) {
         if (handlers.hasOwnProperty(action.type))

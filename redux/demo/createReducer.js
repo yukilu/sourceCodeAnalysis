@@ -1,4 +1,5 @@
-// createReducer示例，还实现了一个简单的combineReducers函数
+// createReducer示例，这个函数主要是用来替代switch的判断方式
+// 另外实现了一个简单的combineReducers函数
 
 /*  原来的小reducer
  *  function count(state = 0, action) {

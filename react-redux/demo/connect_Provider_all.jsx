@@ -40,15 +40,15 @@
 
 // Provider和connect，平行及嵌套关系
 
-// 1.  1 Provider + 1 connect
+// 1***  1 Provider + 1 connect
 <Provider store={store}>
     <Connected />
 </Provider>
 
-// 2.  1 Provider + 2 connect (结构有connect平行还是嵌套2种情况, 只有一个Provider，不用考虑store异同)
+// 2***  1 Provider + 2 connect (结构有connect平行还是嵌套2种情况, 只有一个Provider，不用考虑store异同)
 // Provider -> Provider -> ConnectedA + ConnectedB || Provider -> ConnectedA -> ConnectedB
 
-// 2.1 connect平行(与4.1.1, 4.2.2.1.1效果同)
+// 2.1** connect平行
 // Provider -> ConnectedA + ConnectedB
 <Provider store={store}>
     <div>
@@ -58,7 +58,7 @@
 </Provider>
 // 若监听同名属性，组件会互相影响，这种情况其实与4.1.1是相同的
 
-// 2.2 connect嵌套
+// 2.2** connect嵌套
 // Provider -> ConnectedA -> ConnectedB
 <Provider store={store}>
     <ConnectedA>
@@ -68,11 +68,11 @@
 // ConnectedA为ConnectedB父组件，当然原组件A的写法，render中得渲染this.children才行
 // function A(props) { return React.Children.only(this.children); }
 
-// 3.  2 Provider + 1 connect (结构只有1种情况， 再分store异同，共2类)
+// 3***  2 Provider + 1 connect (结构只有1种情况， 再分store异同，共2类)
 // Provider -> Provider -> connect
 // 就一个connect，没法平行，因为Provider不搭配connect是没意义的，但是传入的store可以不同，所以Provider只能嵌套
 
-// 3.1 store不同
+// 3.1** store不同
 // Proivder(store) -> Provider(anotherStore) -> Connected
 <Provider store={store}>
     <Provider store={anotherStore}>
@@ -82,7 +82,7 @@
 // 由contex机制知，若子组件向context挂载的属性与父组件同名时，子组件会覆盖父组件上的context同名属性
 // 由于Provider到context上的都为store，所以anoterStore会覆盖store，Connected组件中关联的是内层的anotherStore
 
-// 3.2 store相同(与1效果同)
+// 3.2** store相同(与1效果同)
 // Provider(store) -> Provider(store) -> Connected
 <Provider store={store}>
     <Provider store={store}>
@@ -91,14 +91,14 @@
 </Provider>
 // 这个不用想，无论如何，连接的必然为store，这种做法也是不必要的，只需要一层Provider就够了，就如最简单的1中那样
 
-// 4.  2 Provider + 2 connect
-// 这种情况比较复杂，要考虑平行，嵌套，store是否相同，但是connect外层必有Provider的是确定的
+// 4***  2 Provider + 2 connect
+// 这种情况比较复杂，要考虑平行，嵌套，store是否相同，但是connect外层必有Provider是确定的
 
-// 4.1 Provider平行 (结构只有1种情况，再分store异同，共2类)
+// 4.1** Provider平行 (结构只有1种情况，再分store异同，共2类)
 // Provider(ConnectedA) + Provider(ConnectedB)
 //一个Provider搭配一个connect，Provider平行只能如上结构
 
-// 4.1.1 store相同(与2.1, 4.2.2.1.1效果同)
+// 4.1.1* store相同
 // Provider(store) + Provider(store)
 <div>
     <Provider store={store}>
@@ -111,7 +111,7 @@
 // 由于传的是相同的store，A,B组件关联到同一个store上，所以被连接组件A,B，改变state中的值的时候，A，B所获取的state都会改变
 // 当ConnectedA，ConnectedB监听的属性相同时，会互相影响，A的改变会引发B的重新渲染，B同理，改变值会引发另一个组件的重新渲染
 
-// 4.1.2 store不同
+// 4.1.2* store不同
 // Provider(store) + Provider(anotherStore)
 <div>
     <Provider store={store}>
@@ -123,12 +123,12 @@
 </div>
 // 传入的store不同，A,B组件关联到不同store上，这样会造成ConnectedA和ConnectedB是独立的，互不影响
 
-// 4.2 Provider嵌套(按Provider中间是否有connect分为两大类)
+// 4.2** Provider嵌套(按Provider中间是否有connect分为两大类)
 
-// 4.2.1 两个Provider中间没有connect时(与2效果同，按照connect结构，不考虑store异同，共分为2大类)
+// 4.2.1* 两个Provider中间没有connect时(与2效果同，按照connect结构，不考虑store异同，共分为2大类)
 // Provider -> Provider -> ConnectedA + ConnectedB || Provider -> Provider -> ConnectedA -> ConnectedB
 
-// 4.2.1.1 connect平行 (与2.1效果同，store异同，共分为2类)
+// 4.2.1.1 connect平行 (store异同，共分为2类)
 // Provider -> Provider -> ConnectedA + ConnectedB
 
 // 4.2.1.1.1 store相同
@@ -155,7 +155,7 @@
 </Provider>
 // 内层store会覆盖外层，连接的store为内层的anotherStore
 
-// 4.2.1.2 connect嵌套 (与2.2效果同，store异同，共分为2类)
+// 4.2.1.2 connect嵌套 (store异同，共分为2类)
 // Provider -> Provider -> ConnectedA -> ConnectedB
 
 // 4.2.1.2.1 store相同
@@ -182,7 +182,7 @@
 </Provider>
 // 内层store会覆盖外层，连接的store为内层的anotherStore
 
-// 4.2.2 Povider之间有connect (结构有2种，再分store异同)
+// 4.2.2* Povider之间有connect (结构有2种，再分store异同)
 // 因为Provider之间有connect，而另一个connect必然在里层Provider之后，但是外层connect和内层Provider可能平行或嵌套
 // 所以不考虑store异同，排列顺序有两种情况
 // Provider -> connect -> Provider -> connect || Proivder -> connect + Proivder(connect)
@@ -190,7 +190,7 @@
 // 4.2.2.1 外层connect与内层Provider平行
 // Provider -> connect + Provider(connect)
 
-// 4.2.2.1.1 store相同(与2.1, 4.1.1效果同)
+// 4.2.2.1.1 store相同
 // Provider(store) -> connect + Proivder(store)
 <Provider store={store}>
     <ConnectedA/>
@@ -200,7 +200,7 @@
 </Provider>
 // 因为连接了同一个store，会互相影响
 
-// 4.2.2.1.2 store不同 (与4.1.2效果同)
+// 4.2.2.1.2 store不同
 // Provider(store) -> connect + Proivder(anotherStore)
 <Provider store={store}>
     <ConnectedA/>
