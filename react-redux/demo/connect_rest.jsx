@@ -10,6 +10,8 @@ import { Provider, connect } from 'react-redux';
  *   const { propA, propB, ...rest } = this.props;
  *   return <wrapped propA={propA} propB={propB} {...rest} />
  * }
+ *
+ * children是其一个例子，详情见connect_children.jsx
  */ 
 const actions = {
     increase: () => ({ type: 'INCREASE' })
