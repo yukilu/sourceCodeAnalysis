@@ -46,6 +46,8 @@ export function createStore(reducer) {
 function isPropertySame(prev, next) {
     if (typeof prev !== 'object' || typeof next !== 'object')
         throw(new TypeError('prev || next'));
+    if (prev === next)
+        return true;
     return Object.keys(next).every(propName => {
         if (!next.hasOwnProperty(propName))
             return false;
