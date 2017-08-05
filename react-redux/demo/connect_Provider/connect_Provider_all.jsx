@@ -1,6 +1,7 @@
 // Provider和connect所有关系，所有对应示例见connect_Provider_n.m.jsx
 
 /* 规律总结
+ * 0. Provider不是必须的，可以只有Connected组件，只需要直接给其传入store即可，效果与外面有Provider同
  * 1. Connected组件间可以相互嵌套，Provider组件间也可以嵌套，Connected与Provider也可以相互嵌套，不会有什么问题
  * 2. 由于context机制问题，内层Provider会屏蔽外层Provider的store，Connected组件连接的store总是上层组件中最近的那个Provider传入的store
  * 3. Connected组件连接的store相同时，可能会互相影响，连接不同store时是互相独立的。store相同时，监听相同属性会互相影响
@@ -28,7 +29,9 @@
  * 当connect组件为平行关系时，就不需要这么定义，普通的定义就可以了
  */
 
-/* Provider与connect的相对关系，不必紧密相连，只要Provider在connect外层即可，且Provider不必为root组件
+/* Provider与connect的相对关系，不必紧密相连，只要Provider在connect外层即可，且Provider不必为root组件，甚至Provider也不是必须的
+ * 0. Proivder不存在，只有connect
+ *    connect
  * 1. Provider为root组件，紧连着connect
  *    Provider -> connect
  * 2. Provider为root组件，不紧连着connect
@@ -40,6 +43,49 @@
  */
 
 // Provider和connect，平行及嵌套关系
+
+// 0***  0 Provider + 1 connect || 2 connect
+// connected
+//Provider不是必须的，直接给connect传入store也是可以的，因为Provider的作用就是将store挂载到context上，然后传给子组件
+//所以如果connect自己获取store时，Provider也不是必须的
+
+// 0.1** 0 Provider + 1 connect
+<Connected store={store} />
+
+// 0.2** 0 Provider + 2 connect
+// ConnectedA + ConnectedB || ConnectedA -> ConnectedB
+
+// 0.2.1* connect平行
+// connect + connect
+
+// 0.2.1.1 store相同
+// connect(store) + connect(store)
+<div>
+    <ConnectedA store={store} />
+    <ConnectedB store={store} />
+</div>
+
+//0.2.1.2* store不同
+//connect(store) + connect(anotherStore)
+<div>
+    <ConnectedA store={store} />
+    <ConnectedB store={anotherStore} />
+</div>
+
+// 0.2.2* connect嵌套
+// ConnectedA -> ConnectedB
+
+// 0.2.2.1 store相同
+// ConnectedA(store) -> ConnectedB(store)
+<ConnectedA store={store} >
+    <ConnectedB store={store} />
+</ConnectedA>
+
+// 0.2.2.2 store不同
+// ConnectedA(store) -> ConnectedB(anotherStore)
+<ConnectedA store={store} >
+    <ConnectedB store={anotherStore} />
+</ConnectedA>
 
 // 1***  1 Provider + 1 connect
 <Provider store={store}>
