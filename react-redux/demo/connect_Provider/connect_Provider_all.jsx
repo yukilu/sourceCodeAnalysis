@@ -47,7 +47,7 @@
 // 0***  0 Provider + 1 connect || 2 connect
 // connected
 //Provider不是必须的，直接给connect传入store也是可以的，因为Provider的作用就是将store挂载到context上，然后传给子组件
-//所以如果connect自己获取store时，Provider也不是必须的
+//原先Connected通过Provider从context获取store，所以当Connected通过props自己获取store时，Provider也不是必须的
 
 // 0.1** 0 Provider + 1 connect
 <Connected store={store} />

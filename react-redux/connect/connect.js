@@ -1,9 +1,9 @@
-import connectAdvanced from '../components/connectAdvanced'
-import shallowEqual from '../utils/shallowEqual'
-import defaultMapDispatchToPropsFactories from './mapDispatchToProps'
-import defaultMapStateToPropsFactories from './mapStateToProps'
-import defaultMergePropsFactories from './mergeProps'
-import defaultSelectorFactory from './selectorFactory'
+import connectAdvanced from '../components/connectAdvanced';
+import shallowEqual from '../utils/shallowEqual';
+import defaultMapDispatchToPropsFactories from './mapDispatchToProps';
+import defaultMapStateToPropsFactories from './mapStateToProps';
+import defaultMergePropsFactories from './mergeProps';
+import defaultSelectorFactory from './selectorFactory';
 
 /* connect函数作用:
  * 1. 将state上对应属性和一些dispatch操作map进被连接组件内
@@ -14,86 +14,51 @@ import defaultSelectorFactory from './selectorFactory'
  * 而且将store.dispatch操作传入组件内，真正起到了连接redux和react的作用
  */
 
-/*
-  connect is a facade over connectAdvanced. It turns its args into a compatible
-  selectorFactory, which has the signature:
-
-    (dispatch, options) => (nextState, nextOwnProps) => nextFinalProps
-  
-  connect passes its args to connectAdvanced as options, which will in turn pass them to
-  selectorFactory each time a Connect component instance is instantiated or hot reloaded.
-
-  selectorFactory returns a final props selector from its mapStateToProps,
-  mapStateToPropsFactories, mapDispatchToProps, mapDispatchToPropsFactories, mergeProps,
-  mergePropsFactories, and pure args.
-
-  The resulting final props selector is called by the Connect component instance whenever
-  it receives new props or store state.
- */
-
 function match(arg, factories, name) {
   for (let i = factories.length - 1; i >= 0; i--) {
-    const result = factories[i](arg)
-    if (result) return result
+    const result = factories[i](arg);
+    if (result)
+      return result;
   }
 
   return (dispatch, options) => {
-    throw new Error(`Invalid value of type ${typeof arg} for ${name} argument when connecting component ${options.wrappedComponentName}.`)
+    throw new Error(`Invalid value of type ${typeof arg} for ${name} argument when connecting component ${options.wrappedComponentName}.`);
   }
 }
 
-function strictEqual(a, b) { return a === b }
+function strictEqual(a, b) { return a === b; }
 
-// createConnect with default args builds the 'official' connect behavior. Calling it with
-// different options opens up some testing and extensibility scenarios
-export function createConnect({
-  connectHOC = connectAdvanced,
-  mapStateToPropsFactories = defaultMapStateToPropsFactories,
-  mapDispatchToPropsFactories = defaultMapDispatchToPropsFactories,
-  mergePropsFactories = defaultMergePropsFactories,
-  selectorFactory = defaultSelectorFactory
-} = {}) {
-  return function connect(
-    mapStateToProps,
-    mapDispatchToProps,
-    mergeProps,
-    {
-      pure = true,
-      areStatesEqual = strictEqual,
-      areOwnPropsEqual = shallowEqual,
-      areStatePropsEqual = shallowEqual,
-      areMergedPropsEqual = shallowEqual,
-      ...extraOptions
-    } = {}
-  ) {
-    const initMapStateToProps = match(mapStateToProps, mapStateToPropsFactories, 'mapStateToProps')
-    const initMapDispatchToProps = match(mapDispatchToProps, mapDispatchToPropsFactories, 'mapDispatchToProps')
-    const initMergeProps = match(mergeProps, mergePropsFactories, 'mergeProps')
+export function createConnect({ connectHOC = connectAdvanced, mapStateToPropsFactories = defaultMapStateToPropsFactories,
+mapDispatchToPropsFactories = defaultMapDispatchToPropsFactories, mergePropsFactories = defaultMergePropsFactories,
+selectorFactory = defaultSelectorFactor } = {}) {
 
+  return function connect(mapStateToProps, mapDispatchToProps, mergeProps,{ pure = true, areStatesEqual = strictEqual, areOwnPropsEqual = shallowEqual,
+    areStatePropsEqual = shallowEqual, areMergedPropsEqual = shallowEqual, ...extraOptions } = {}) {
+
+    /* mapStateToProps为自己传入 function mapStateToProps(state, ownProps) { return { a: state.a }; }
+     * createConnect({ ...  mapStateToPropsFactories = defaultMapStateToPropsFactories} = {}) { ... }
+     * import defaultMapStateToPropsFactories from './mapStateToProps';
+     * mapStateToPropsFactories -> defaultMapStateToPropsFactories -> [whenMapStateToPropsIsFunction, whenMapStateToPropsIsMissing]
+     * 若mapStateToProps为函数 initMapStateToProps = wrapMapToPropsFunc(mapStateToProps, 'mapStateToProps') -> initProxySelector */
+    const initMapStateToProps = match(mapStateToProps, mapStateToPropsFactories, 'mapStateToProps');
+    const initMapDispatchToProps = match(mapDispatchToProps, mapDispatchToPropsFactories, 'mapDispatchToProps');
+    const initMergeProps = match(mergeProps, mergePropsFactories, 'mergeProps');
+
+    // connectHOC -> connectAdvanced
     return connectHOC(selectorFactory, {
-      // used in error messages
-      methodName: 'connect',
-
-       // used to compute Connect's displayName from the wrapped component's displayName.
-      getDisplayName: name => `Connect(${name})`,
-
-      // if mapStateToProps is falsy, the Connect component doesn't subscribe to store state changes
-      shouldHandleStateChanges: Boolean(mapStateToProps),
-
-      // passed through to selectorFactory
+      /* createConnect({... selectorFactory = defaultSelectorFactor} = {}) { ... }
+       * import defaultSelectorFactory from './selectorFactory';
+       * selectorFactory -> defaultSelectorFactor -> finalPropsSelectorFactory */
+      methodName: 'connect', getDisplayName: name => `Connect(${name})`, 
+      shouldHandleStateChanges: Boolean(mapStateToProps), // mapStateToProps存在->true，不存在->false
+      /* initMapStateToProps = match(...) = wrapMapToPropsFunc(mapStateToProps, 'mapStateToProps')
+       * 返回值为函数 function initProxySelector(dispatch, { displayName }) { ... } (from wrapMapToProps.js) */
       initMapStateToProps,
       initMapDispatchToProps,
       initMergeProps,
-      pure,
-      areStatesEqual,
-      areOwnPropsEqual,
-      areStatePropsEqual,
-      areMergedPropsEqual,
-
-      // any extra options args can override defaults of connect or connectAdvanced
-      ...extraOptions
-    })
-  }
+      pure, areStatesEqual, areOwnPropsEqual, areStatePropsEqual, areMergedPropsEqual,...extraOptions
+    });
+  };
 }
 
-export default createConnect()
+export default createConnect();

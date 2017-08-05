@@ -1,125 +1,91 @@
-import verifySubselectors from './verifySubselectors'
-  
-export function impureFinalPropsSelectorFactory(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps,
-  dispatch
-) {
+export function impureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProps, mergeProps, dispatch) {
   return function impureFinalPropsSelector(state, ownProps) {
-    return mergeProps(
-      mapStateToProps(state, ownProps),
-      mapDispatchToProps(dispatch, ownProps),
-      ownProps
-    )
-  }
+    return mergeProps(mapStateToProps(state, ownProps), mapDispatchToProps(dispatch, ownProps), ownProps);
+  };
 }
 
-export function pureFinalPropsSelectorFactory(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps,
-  dispatch,
-  { areStatesEqual, areOwnPropsEqual, areStatePropsEqual }
-) {
-  let hasRunAtLeastOnce = false
-  let state
-  let ownProps
-  let stateProps
-  let dispatchProps
-  let mergedProps
+export function pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProps, mergeProps, dispatch, { areStatesEqual, areOwnPropsEqual, areStatePropsEqual }) {
+  let hasRunAtLeastOnce = false;
+  let state, ownProps, stateProps, dispatchProps, mergedProps;
 
-  function handleFirstCall(firstState, firstOwnProps) {
-    state = firstState
-    ownProps = firstOwnProps
-    stateProps = mapStateToProps(state, ownProps)
-    dispatchProps = mapDispatchToProps(dispatch, ownProps)
-    mergedProps = mergeProps(stateProps, dispatchProps, ownProps)
-    hasRunAtLeastOnce = true
-    return mergedProps
+  function handleFirstCall(firstState, firstOwnProps) { // 第一次走这里
+    state = firstState;
+    ownProps = firstOwnProps;
+    stateProps = mapStateToProps(state, ownProps);
+    dispatchProps = mapDispatchToProps(dispatch, ownProps);
+    mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+    hasRunAtLeastOnce = true;
+    return mergedProps;
+  }
+
+  function handleSubsequentCalls(nextState, nextOwnProps) { // 第二次开始走这里，根据情况选择下面三个函数之一执行
+    const propsChanged = !areOwnPropsEqual(nextOwnProps, ownProps);
+    const stateChanged = !areStatesEqual(nextState, state);
+    state = nextState;
+    ownProps = nextOwnProps;
+
+    if (propsChanged && stateChanged)
+      return handleNewPropsAndNewState();
+    if (propsChanged)
+      return handleNewProps();
+    if (stateChanged)
+      return handleNewState();
+
+    return mergedProps;
   }
 
   function handleNewPropsAndNewState() {
-    stateProps = mapStateToProps(state, ownProps)
+    stateProps = mapStateToProps(state, ownProps);
 
     if (mapDispatchToProps.dependsOnOwnProps)
-      dispatchProps = mapDispatchToProps(dispatch, ownProps)
+      dispatchProps = mapDispatchToProps(dispatch, ownProps);
 
-    mergedProps = mergeProps(stateProps, dispatchProps, ownProps)
-    return mergedProps
+    mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+    return mergedProps;
   }
 
   function handleNewProps() {
     if (mapStateToProps.dependsOnOwnProps)
-      stateProps = mapStateToProps(state, ownProps)
+      stateProps = mapStateToProps(state, ownProps);
 
     if (mapDispatchToProps.dependsOnOwnProps)
-      dispatchProps = mapDispatchToProps(dispatch, ownProps)
+      dispatchProps = mapDispatchToProps(dispatch, ownProps);
 
-    mergedProps = mergeProps(stateProps, dispatchProps, ownProps)
-    return mergedProps
+    mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+    return mergedProps;
   }
 
   function handleNewState() {
-    const nextStateProps = mapStateToProps(state, ownProps)
-    const statePropsChanged = !areStatePropsEqual(nextStateProps, stateProps)
-    stateProps = nextStateProps
+    const nextStateProps = mapStateToProps(state, ownProps);
+    const statePropsChanged = !areStatePropsEqual(nextStateProps, stateProps);
+    stateProps = nextStateProps;
     
     if (statePropsChanged)
-      mergedProps = mergeProps(stateProps, dispatchProps, ownProps)
+      mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
 
-    return mergedProps
-  }
-
-  function handleSubsequentCalls(nextState, nextOwnProps) {
-    const propsChanged = !areOwnPropsEqual(nextOwnProps, ownProps)
-    const stateChanged = !areStatesEqual(nextState, state)
-    state = nextState
-    ownProps = nextOwnProps
-
-    if (propsChanged && stateChanged) return handleNewPropsAndNewState()
-    if (propsChanged) return handleNewProps()
-    if (stateChanged) return handleNewState()
-    return mergedProps
+    return mergedProps;
   }
 
   return function pureFinalPropsSelector(nextState, nextOwnProps) {
-    return hasRunAtLeastOnce
-      ? handleSubsequentCalls(nextState, nextOwnProps)
-      : handleFirstCall(nextState, nextOwnProps)
+    return hasRunAtLeastOnce ? handleSubsequentCalls(nextState, nextOwnProps) : handleFirstCall(nextState, nextOwnProps);
   }
 }
 
-// TODO: Add more comments
+export default function finalPropsSelectorFactory(dispatch, { initMapStateToProps, initMapDispatchToProps, initMergeProps, ...options }) {
+  /* initMapStateToProps = initProxySelector (from wrapMapToProps.js)
+   * mapStateToProps = mapToPropsProxy;
+   * initMapStateToProps = (dispatch, { displayName }) => (stateOrDispatch, ownProps) => {
+   *     return proxy.dependsOnOwnProps ? proxy.mapToProps(stateOrDispatch, ownProps) : proxy.mapToProps(stateOrDispatch);
+   * };
+   * mapStateToProps = (stateOrDispatch, ownProps) => { ... } */
+  const mapStateToProps = initMapStateToProps(dispatch, options); 
+  const mapDispatchToProps = initMapDispatchToProps(dispatch, options);
+  const mergeProps = initMergeProps(dispatch, options);
 
-// If pure is true, the selector returned by selectorFactory will memoize its results,
-// allowing connectAdvanced's shouldComponentUpdate to return false if final
-// props have not changed. If false, the selector will always return a new
-// object and shouldComponentUpdate will always return true.
+  const selectorFactory = options.pure ? pureFinalPropsSelectorFactory : impureFinalPropsSelectorFactory;
 
-export default function finalPropsSelectorFactory(dispatch, {
-  initMapStateToProps,
-  initMapDispatchToProps,
-  initMergeProps,
-  ...options
-}) {
-  const mapStateToProps = initMapStateToProps(dispatch, options)
-  const mapDispatchToProps = initMapDispatchToProps(dispatch, options)
-  const mergeProps = initMergeProps(dispatch, options)
-
-  if (process.env.NODE_ENV !== 'production') {
-    verifySubselectors(mapStateToProps, mapDispatchToProps, mergeProps, options.displayName)
-  }
-
-  const selectorFactory = options.pure
-    ? pureFinalPropsSelectorFactory
-    : impureFinalPropsSelectorFactory
-
-  return selectorFactory(
-    mapStateToProps,
-    mapDispatchToProps,
-    mergeProps,
-    dispatch,
-    options
-  )
+  /* 默认pure = true, selectorFactory = pureFinalPropsSelectorFactory
+   * pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProps, mergeProps, dispatch, options)
+   * 返回值为函数function pureFinalPropsSelector(nextState, nextOwnProps)) { ... } */
+  return selectorFactory(mapStateToProps, mapDispatchToProps, mergeProps, dispatch, options);
 }
