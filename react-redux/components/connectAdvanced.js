@@ -168,7 +168,7 @@ export default function connectAdvanced(selectorFactory ,{
 
       /* ComponentDidUpdate调用完后，重新赋值undefined，这样再下次触发onStateChange时，如果不用重新渲染，DidUpdate函数就不该存在
        * 则其值应该再上次update后置空，或者在onStateChange中，如果不需要渲染时(if (!this.selector.shouldComponentUpdate))置空也可以
-       * 然后再调用notifyNestedSubs触发下层组件的onStateChange函数*/
+       * 然后再调用notifyNestedSubs触发下层组件的onStateChange函数 */
       notifyNestedSubsOnComponentDidUpdate() {
         this.componentDidUpdate = undefined;
         this.notifyNestedSubs();

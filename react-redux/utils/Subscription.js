@@ -61,7 +61,7 @@ export default class Subscription {
    * 上层Connect.subscription.listeners中监听的为下层Connect.onStateChange
    * 所以在notifyNestedSubs中，this.listeners.notify()时候调用的监听函数为下层Connect.onStateChange函数，而onStateChange函数中又会
    * 调用当前Connect.subscription.notifyNestedSubs，触发下下层Connect.onStateChange函数，如此层层往下传递
-   * 最上层的Connect组件由于是store.subscribe(this.onStateChange)，是由store中state状态改变而触发，调用最上层Connect.subscription.notifyNestedSubs
+   * 最上层的Connect组件由于是store.subscribe(onStateChange)，是由store中state状态改变而触发，调用最上层Connect.subscription.notifyNestedSubs
    */
   addNestedSub(listener) {
     this.trySubscribe();
