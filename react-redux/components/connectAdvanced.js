@@ -78,7 +78,8 @@ export default function connectAdvanced(selectorFactory ,{
       }
 
       getChildContext() {
-        const subscription = this.propsMode ? null : this.subscription;
+        const subscription = this.propsMode ? null : this.subscription;  // 默认false，值为this.subscription
+        // 默认返回 { storeSubscription: this.subscription }
         return { [subscriptionKey]: subscription || this.context[subscriptionKey] };
       }
 
@@ -136,23 +137,38 @@ export default function connectAdvanced(selectorFactory ,{
         if (!shouldHandleStateChanges)
           return;
 
-        // 默认为this.context.storeSubcription，当为Provider下第一个connect时，为undefined
+        /* 默认为this.context.storeSubcription，当为Provider下第一个connect时，parentSub = undefined
+         * 当为嵌套connect的内层时，parentSub = this.context.storeSubscription
+         * this.context.storeSubcription是上层connect挂载的storeSubscription，为其subscription实例 */
         const parentSub = (this.propsMode ? this.props : this.context)[subscriptionKey];
         this.subscription = new Subscription(this.store, parentSub, this.onStateChange.bind(this));
         this.notifyNestedSubs = this.subscription.notifyNestedSubs.bind(this.subscription);
       }
 
+      // onStateChange中不论props是否改变，即当前组件是否需要重新渲染，都会通过调用其挂载的subscription.notifyNestedSubs
+      // 来触发下层组件的onStateChange，从而层层往下传递，层层调用onStateChange函数，思想与react组件的渲染和更新相同
       onStateChange() {
-        this.selector.run(this.props);
+        this.selector.run(this.props);  // 重新计算props
 
+        /* 1. props未变，不需要重新渲染时，直接通过notifyNestedSubs触发下层onStateChange
+         * 直接调用当前组件下挂载的subscription的notifyNestedSubs，从而触发下层组件的onStateChange，具体过程参见Subscribtion.js
+         * 中的addNestedSub及notifyNestedSubs函数注释
+         * 2. props改变时，需要调用setState({})重新渲染，再通过ComponentDidUpdate触发下层onStateChange
+         * ComponentDidUpdate重新赋值为notifyNestedSubsOnComponentDidUpdate(函数具体作用见对应注释)
+         * 用setState({})(空对象，因state都托管给了redux)重新渲染当前组件
+         * 当重新渲染完成后，再通过生命周期ComponentDidUpdate指向的回调函数调用notifyNestedSubs触发下层onStateChange
+         */
         if (!this.selector.shouldComponentUpdate)
-          this.notifyNestedSubs();
-        else {
+          this.notifyNestedSubs();  
+        else {  
           this.componentDidUpdate = this.notifyNestedSubsOnComponentDidUpdate;
           this.setState(dummyState);
         }
       }
 
+      /* ComponentDidUpdate调用完后，重新赋值undefined，这样再下次触发onStateChange时，如果不用重新渲染，DidUpdate函数就不该存在
+       * 则其值应该再上次update后置空，或者在onStateChange中，如果不需要渲染时(if (!this.selector.shouldComponentUpdate))置空也可以
+       * 然后再调用notifyNestedSubs触发下层组件的onStateChange函数*/
       notifyNestedSubsOnComponentDidUpdate() {
         this.componentDidUpdate = undefined;
         this.notifyNestedSubs();
@@ -207,6 +223,6 @@ export default function connectAdvanced(selectorFactory ,{
       }
     }
 
-    return hoistStatics(Connect, WrappedComponent);
+    return hoistStatics(Connect, WrappedComponent);  // 将被包裹组件的非React静态属性拷贝到Connect组件上
   }
 }
