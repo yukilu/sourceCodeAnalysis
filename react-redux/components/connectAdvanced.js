@@ -11,10 +11,13 @@ function makeSelectorStateful(sourceSelector, store) {
   const selector = {
     run: function runComponentSelector(props) {
       try {
-        // sourceSelector = function pureFinalPropsSelector(nextState, nextOwnProps)) { ... } (from selectorFactory.js)
-        // 返回值为mergedProps，是处理state和ownProps的函数
+        /* sourceSelector = function pureFinalPropsSelector(nextState, nextOwnProps)) { ... } (from selectorFactory.js)
+        * 返回值为mergedProps，是处理state和ownProps的函数 */
         const nextProps = sourceSelector(store.getState(), props);
-        if (nextProps !== selector.props || selector.error) { // 处理过后的props和原props比较
+        /* 处理过后的props和原props比较，不相等时shouldComponentUpdate = true，然后更新selector.props的值
+         * 相等时就什么都不做，因在render中会将shouldComponentUpdate设为false，所以每次渲染之后进这里默认是false
+         * props也不覆盖，即使用原来的值 */
+        if (nextProps !== selector.props || selector.error) {
           selector.shouldComponentUpdate = true;
           selector.props = nextProps;
           selector.error = null;

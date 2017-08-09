@@ -32,7 +32,7 @@ export function createConnect({ connectHOC = connectAdvanced, mapStateToPropsFac
 mapDispatchToPropsFactories = defaultMapDispatchToPropsFactories, mergePropsFactories = defaultMergePropsFactories,
 selectorFactory = defaultSelectorFactor } = {}) {
 
-  return function connect(mapStateToProps, mapDispatchToProps, mergeProps,{ pure = true, areStatesEqual = strictEqual, areOwnPropsEqual = shallowEqual,
+  return function connect(mapStateToProps, mapDispatchToProps, mergeProps, { pure = true, areStatesEqual = strictEqual, areOwnPropsEqual = shallowEqual,
     areStatePropsEqual = shallowEqual, areMergedPropsEqual = shallowEqual, ...extraOptions } = {}) {
 
     /* mapStateToProps为自己传入 function mapStateToProps(state, ownProps) { return { a: state.a }; }
@@ -41,6 +41,8 @@ selectorFactory = defaultSelectorFactor } = {}) {
      * mapStateToPropsFactories -> defaultMapStateToPropsFactories -> [whenMapStateToPropsIsFunction, whenMapStateToPropsIsMissing]
      * 若mapStateToProps为函数 initMapStateToProps = wrapMapToPropsFunc(mapStateToProps, 'mapStateToProps') -> initProxySelector */
     const initMapStateToProps = match(mapStateToProps, mapStateToPropsFactories, 'mapStateToProps');
+    /* mapDispatchToProps过程同上
+     * initMapDispatchToProps = wrapMapToPropsFunc(mapDispatchToProps, 'mapDispatchToProps') -> initProxySelector */
     const initMapDispatchToProps = match(mapDispatchToProps, mapDispatchToPropsFactories, 'mapDispatchToProps');
     const initMergeProps = match(mergeProps, mergePropsFactories, 'mergeProps');
 

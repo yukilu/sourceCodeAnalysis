@@ -77,9 +77,14 @@ export default function finalPropsSelectorFactory(dispatch, { initMapStateToProp
    * initMapStateToProps = (dispatch, { displayName }) => (stateOrDispatch, ownProps) => {
    *     return proxy.dependsOnOwnProps ? proxy.mapToProps(stateOrDispatch, ownProps) : proxy.mapToProps(stateOrDispatch);
    * };
-   * mapStateToProps = (stateOrDispatch, ownProps) => { ... } */
+   * 若最初传入的为function mapStateToProps(state) { return { a: state.a }; }
+   * 则mapStateToProps = (stateOrDispatch, ownProps) => proxy.mapToProps(stateOrDispatch);
+   * 由于proxy.mapStateToProps = function mapStateToProps(state) { ... }，就是传入的上面那个定义好的mapStateToProps
+   * 实际上调用这里的mapStateToProps就调用proxy.mapToProps，而proxy.mapToProps就是上面传入的mapStateToProps
+   * 所以最后的结果就是调用这里的mapStateToProps来产生新props就是调用了传入的mapToProps来产生新props
+   * 之所以中间搞了那么多，是为了处理传入的mapStateToProps和mapDispatchToProps各种不同的值的情况 */
   const mapStateToProps = initMapStateToProps(dispatch, options); 
-  const mapDispatchToProps = initMapDispatchToProps(dispatch, options);
+  const mapDispatchToProps = initMapDispatchToProps(dispatch, options);  // mapDispatchToProps和mapStateToProps情况差不多，不赘述
   const mergeProps = initMergeProps(dispatch, options);
 
   const selectorFactory = options.pure ? pureFinalPropsSelectorFactory : impureFinalPropsSelectorFactory;
