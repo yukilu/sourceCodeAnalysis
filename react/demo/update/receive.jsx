@@ -11,6 +11,8 @@ import { render } from 'react-dom';
  *
  * 所以默认时候，这些update相关的生命周期函数都会被调用来重新渲染组件，若组件数过大，而props值实际并未改变多少时，会带来性能问题
  * 所以有时候可以手动设置shouldComponentUpdate的返回值为false来提高性能，但是这样会造成当前组件的下层组件无法重新渲染的问题
+ *
+ * 组件生命周期相关参见 https://facebook.github.io/react/docs/react-component.html
  */
 class A extends Component {
     constructor(props) {
