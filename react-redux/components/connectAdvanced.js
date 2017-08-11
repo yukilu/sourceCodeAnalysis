@@ -100,6 +100,32 @@ export default function connectAdvanced(selectorFactory ,{
         this.selector.run(nextProps);
       }
 
+      /* 顶层的Connect组件的onStateChange是由store.subscribe来监听的，即只要store.dispatch分发action时就会触发，继而调用顶层onStateChange
+       * 来进行下一步操作
+       * 
+       * Connect组件通过设定shouldComponentUpdate来改进性能，因为默认的返回值为true，即不论props是否改变，都会层层往下调用update
+       * 相关生命周期函数，并重新渲染组件，如果只是一次性从上到下渲染组件树倒是问题不大，但是当Connect组件相互嵌套时，就会出现重复渲染
+       * 
+       * 假设 Connect1 -> Connect2，Connect1下嵌套了Connect2组件，这就会带来一个Connect2组件重复渲染及哪个先进行的问题
+       * 即是Connect1.setState({})引起的重新渲染先进行，还是Connect1.onStateChange引发的Connect2.onStateChange引起的重新渲染先进行的问题
+       * 当然由React渲染原理知，肯定是Connect1.setState({})触发的重新渲染先于Connect2.onStateChange
+       *
+       * 若Connect1中监听的属性发生了改变，Connect2中监听的属性改变或未改变
+       * 下面为具体过程Connect1.onStateChange -> Connect1.setState({}) -> Connect2.receive&render -> Connect2.onStateChange -> Connect2.setState({})
+       * 1. Connect1.onStateChange触发Connect1.setState({})重新渲染该组件树
+       * store中dispatch触发顶层组件即Connect1.onStateChange，然后调用Connect1的setState({})重新渲染，但是setState渲染的并不只是当前组件，
+       * 而是会渲染整个Connect1组件树，所以会向下层层重新渲染，当然也会重新渲染Connect2，此时触发Connect2.componentWillReceiveProps，
+       * 就会重新计算并比较props，若Connect2监听的属性没变化，则shouldComponentUpdate返回false，update就停在了当前组件，其往下的组件
+       * 也都不会更新，若为true，就重新渲染当前及以下组件，直到下一个Connect再重复以上过程。
+       * 2. 上述过程进行完之后，Connect1.onStateChange会向下触发Connect2.onStateChange，引起Connect2.setState({})
+       * 此时由于在1中已经重新计算props，并重新渲染过了，所以此时的Connect2.props没有发生改变，shouldComponentUpdate返回false，
+       * 当前及以下组件都不会重新渲染。
+       *
+       * 若Connect1中监听的属性并未发生改变，而Connect2中的属性发生了改变
+       * 具体过程为Connect1.onStateChange -> Connect2.onStateChange -> Connect2.setState({})
+       * 1. store中的dispatch触发顶层onStateChange函数，若Connect1监听属性未发生改变，则shouldComponentUpdate返回false，都不更新
+       * 2. 继而直接触发Connect2.onStateChange，引发Connect2.setState({})，渲染该组件树，直到下一个Connect组件根据具体情况重复以上所有过程
+       */
       shouldComponentUpdate() {
         return this.selector.shouldComponentUpdate;
       }

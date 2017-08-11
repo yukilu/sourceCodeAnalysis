@@ -83,6 +83,8 @@ export default class Subscription {
    * ...
    * 由以上规律知，当前Connect.trySubscribe()时，都是调用上层组件的subscription来添加当前组件的onStateChange函数
    * 即当前Connect.subscription.listeners监听的为下层组件的onStateChange函数，而第一个Connect组件的onStateChange由store监听
+   * 由store.subscribe函数知只要dispatch分发action时，就会触发监听的函数，即会调用顶层Connect的onStateChange函数，查看监听
+   * 的属性是否发生改变，再进行下一步处理
    */
   trySubscribe() {
     if (!this.unsubscribe) {
