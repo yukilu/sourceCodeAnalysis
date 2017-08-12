@@ -22,6 +22,23 @@ class A extends Component {
         this.handleClick = this.handleClick.bind(this);
     }
 
+    componentWillReceiveProps(nextProps) {
+        console.log('A.receive ', nextProps);
+    }
+
+    shouldComponentUpdate(nextProps) {
+        console.log('A.shouldComponentUpdate = true ', nextProps);
+        return true;
+    }
+
+    componentWillUpdate(nextProps) {
+        console.log('A.componentWillUpdate', nextProps);
+    }
+
+    componentDidUpdate(nextProps) {
+        console.log('A.componentDidUpdate', nextProps);
+    }
+
     handleClick(ev) {
         // this.setState({ a: 0 });
         this.setState({ a: 1 });
