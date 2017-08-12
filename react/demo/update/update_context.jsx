@@ -83,4 +83,5 @@ class B extends Component {
     }
 }
 
+// 直接返回B本来就能层层往下传导更新，所以此处用children，因为children是不行的，而加了context之后，就变的可以层层往下更新了
 render(<A><B/></A>,document.getElementById('root'));
