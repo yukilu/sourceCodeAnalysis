@@ -109,6 +109,7 @@ export default function connectAdvanced(selectorFactory ,{
        * 假设 Connect1 -> Connect2，Connect1下嵌套了Connect2组件，这就会带来一个Connect2组件重复渲染及哪个先进行的问题
        * 即是Connect1.setState({})引起的重新渲染先进行，还是Connect1.onStateChange引发的Connect2.onStateChange引起的重新渲染先进行的问题
        * 当然由React渲染原理知，肯定是Connect1.setState({})触发的重新渲染先于Connect2.onStateChange
+       * 该问题具体参见react/demo/update/rerender_reactRedux_same|diff.jsx示例
        *
        * 若Connect1中监听的属性发生了改变，Connect2中监听的属性改变或未改变
        * 下面为具体过程Connect1.onStateChange -> Connect1.setState({}) -> Connect2.receive&render -> Connect2.onStateChange -> Connect2.setState({})
