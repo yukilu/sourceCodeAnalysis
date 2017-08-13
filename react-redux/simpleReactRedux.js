@@ -122,7 +122,7 @@ export function connect(mapStateToProps = defaultMapToProps, mapDispatchToProps 
     }
 }
 
-// 源码中对于mapStateToProps, mapDispatchToProps, mergeProps还需要用factory，wrap函数等进行处理，这里就简化，直接自己定义
+// 源码中对于mapStateToProps, mapDispatchToProps, mergeProps还需要用factory，wrap等函数进行处理，这里就简化，直接自己定义
 function defaultMergeProps(stateProps, dispatchProps, ownProps) {
     return { ...ownProps, ...stateProps, ...dispatchProps };
 }
@@ -145,7 +145,7 @@ function setDependsOnOwnProps(mapToProps) {
 
 // 简化了selectorFactory，处理state和props变化的核心代码都与源码相同
 function selectorFactory(dispatch, selectorFactoryOptions) {
-    // selectorFactoryOptions最主要的就是传入了生成新props的mapStateToProps, mapDispatchToProps, mergeProps函数
+    // selectorFactoryOptions最主要的就是传入了生成新props所需的mapStateToProps, mapDispatchToProps, mergeProps函数
     const { mapStateToProps, mapDispatchToProps, mergeProps } = selectorFactoryOptions;
     let hasRunAtLeastOnce = false;
     let state, ownProps, stateProps, dispatchProps, mergedProps;
