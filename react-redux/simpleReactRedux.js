@@ -1,4 +1,4 @@
-import { Component, Children } from 'react';
+import { Component, Children, createElement } from 'react';
 import PropTypes from 'prop-types';
 
 export class Provider extends Component {
@@ -30,90 +30,6 @@ class Selector {
             this.shouldComponentUpdate = true;
         }
     }
-}
-
-function defaultMergeProps(stateProps, dispatchProps, ownProps) {
-    return { ...stateProps, ...dispatchProps, ...ownProps };
-}
-
-function defaultMapToProps(stateOrDispatch) {
-    return {};
-}
-
-function setDependsOnOwnProps(mapToProps) {
-    mapToProps.dependsOnOwnProps = mapToProps.length !== 1; 
-}
-
-function selectorFactory(dispatch, selectorFactoryOptions) {
-    const { mapStateToProps, mapDispatchToProps, mergeProps } = selectorFactoryOptions;
-    let hasRunAtLeastOnce = false;
-    let state, ownProps, stateProps, dispatchProps, mergedProps;
-
-    function handleFirstCall(firstState, firstOwnProps) {
-        state = firstState;
-        ownProps = firstOwnProps;
-        stateProps = mapStateToProps(state, ownProps);
-        dispatchProps = mapDispatchToProps(dispatch, ownProps);
-        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
-
-        hasRunAtLeastOnce = true;
-
-        return mergedProps;
-    }
-
-    function handleSubsequentCalls(nextState, nextOwnProps) {
-        const propsChanged = !shallowEqual(ownProps, nextOwnProps);
-        const stateChanged = !strictEqual(state, nextState);
-        state = nextState;
-        ownProps = nextOwnProps;
-
-        if (propsChanged && stateChanged)
-            return handleNewPropsAndNewState();
-        if (propsChanged)
-            return handleNewProps();
-        if (stateChanged)
-            return handleNewState();
-
-        return mergedProps;
-    }
-
-    function handleNewPropsAndNewState() {
-        stateProps = mapStateToProps(state, ownProps);
-
-        if (mapDispatchToProps.dependsOnOwnProps)
-            dispatchProps = mapDispatchToProps(dispatch, ownProps);
-
-        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
-
-        return mergedProps;
-    }
-
-    function handleNewProps() {
-        if (mapStateToProps.dependsOnOwnProps)
-            stateProps = mapStateToProps(state, ownProps);
-
-        if (mapDispatchToProps.dependsOnOwnProps)
-            dispatchProps = mapDispatchToProps(dispatch, ownProps);
-
-        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
-
-        return mergedProps;
-    }
-
-    function handleNewState() {
-        const nextStateProps = mapStateToProps(state, ownProps);
-
-        if (!shallowEqual(stateProps, nextStateProps))
-            mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
-
-        stateProps = nextStateProps;
-
-        return mergedProps;
-    }
-
-    return function (nextState, nextOwnProps) {
-        return hasRunAtLeastOnce ? handleSubsequentCalls(nextState, nextOwnProps) : handleFirstCall(nextState, nextOwnProps);
-    };
 }
 
 export function connect(mapStateToProps = defaultMapToProps, mapDispatchToProps = defaultMapToProps, mergeProps = defaultMergeProps) {
@@ -188,6 +104,92 @@ export function connect(mapStateToProps = defaultMapToProps, mapDispatchToProps 
 
         return Connect;
     }
+}
+
+function defaultMergeProps(stateProps, dispatchProps, ownProps) {
+    return { ...ownProps, ...stateProps, ...dispatchProps };
+}
+
+function defaultMapToProps(stateOrDispatch) {
+    return {};
+}
+
+function setDependsOnOwnProps(mapToProps) {
+    if (typeof mapToProps.dependsOnOwnProps === undefined)
+        mapToProps.dependsOnOwnProps = mapToProps.length !== 1; 
+}
+
+function selectorFactory(dispatch, selectorFactoryOptions) {
+    const { mapStateToProps, mapDispatchToProps, mergeProps } = selectorFactoryOptions;
+    let hasRunAtLeastOnce = false;
+    let state, ownProps, stateProps, dispatchProps, mergedProps;
+
+    function handleFirstCall(firstState, firstOwnProps) {
+        state = firstState;
+        ownProps = firstOwnProps;
+        stateProps = mapStateToProps(state, ownProps);
+        dispatchProps = mapDispatchToProps(dispatch, ownProps);
+        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+
+        hasRunAtLeastOnce = true;
+
+        return mergedProps;
+    }
+
+    function handleSubsequentCalls(nextState, nextOwnProps) {
+        const propsChanged = !shallowEqual(ownProps, nextOwnProps);
+        const stateChanged = !strictEqual(state, nextState);
+        state = nextState;
+        ownProps = nextOwnProps;
+
+        if (propsChanged && stateChanged)
+            return handleNewPropsAndNewState();
+        if (propsChanged)
+            return handleNewProps();
+        if (stateChanged)
+            return handleNewState();
+
+        return mergedProps;
+    }
+
+    function handleNewPropsAndNewState() {
+        stateProps = mapStateToProps(state, ownProps);
+
+        if (mapDispatchToProps.dependsOnOwnProps)
+            dispatchProps = mapDispatchToProps(dispatch, ownProps);
+
+        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+
+        return mergedProps;
+    }
+
+    function handleNewProps() {
+        if (mapStateToProps.dependsOnOwnProps)
+            stateProps = mapStateToProps(state, ownProps);
+
+        if (mapDispatchToProps.dependsOnOwnProps)
+            dispatchProps = mapDispatchToProps(dispatch, ownProps);
+
+        mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+
+        return mergedProps;
+    }
+
+    function handleNewState() {
+        const nextStateProps = mapStateToProps(state, ownProps);
+        const statePropsChanged = !shallowEqual(stateProps, nextStateProps);
+
+        stateProps = nextStateProps;
+
+        if (statePropsChanged)
+            mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
+
+        return mergedProps;
+    }
+
+    return function (nextState, nextOwnProps) {
+        return hasRunAtLeastOnce ? handleSubsequentCalls(nextState, nextOwnProps) : handleFirstCall(nextState, nextOwnProps);
+    };
 }
 
 function shallowEqual(obj1, obj2) {
