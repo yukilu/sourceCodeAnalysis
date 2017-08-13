@@ -1,8 +1,8 @@
 import { Component, Children, createElement } from 'react';
 import PropTypes from 'prop-types';
 
-/* 实现了一个最简单的react-redux，没做错误处理，并简化了Connect组件，去掉了必要属性，并且无法嵌套，只能单一使用
- * 但是该简单实现，基本保留了源码的设计思想，如selector等 */
+/* 实现了一个最简单的react-redux，没做错误处理，并简化了Connect组件，去掉了非必要属性，并且无法嵌套，只能单一使用
+ * 但是该简单实现，基本保留了源码的设计思想，如selector, factory等 */
 
 // Provider组件，提供了最核心的功能，将store挂载到context上，传入子组件，并且render返回值为props.children
 export class Provider extends Component {
