@@ -8,7 +8,7 @@ export function pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProp
   let hasRunAtLeastOnce = false;
   let state, ownProps, stateProps, dispatchProps, mergedProps;
 
-  function handleFirstCall(firstState, firstOwnProps) { // 第一次走这里
+  function handleFirstCall(firstState, firstOwnProps) { // 第一次走这里，将上面的属性都初始化一遍
     state = firstState;
     ownProps = firstOwnProps;
     stateProps = mapStateToProps(state, ownProps);
@@ -19,8 +19,8 @@ export function pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProp
   }
 
   function handleSubsequentCalls(nextState, nextOwnProps) { // 第二次开始走这里，根据情况选择下面三个函数之一执行
-    const propsChanged = !areOwnPropsEqual(nextOwnProps, ownProps);
-    const stateChanged = !areStatesEqual(nextState, state);
+    const propsChanged = !areOwnPropsEqual(nextOwnProps, ownProps);  // props是否改变，shallowEqual
+    const stateChanged = !areStatesEqual(nextState, state);  // state是否改变，strictEqual，若reducer产生的新的state，必然不是一个对象
     state = nextState;
     ownProps = nextOwnProps;
 
@@ -34,30 +34,36 @@ export function pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProp
     return mergedProps;
   }
 
-  function handleNewPropsAndNewState() {
-    stateProps = mapStateToProps(state, ownProps);
+  function handleNewPropsAndNewState() {  // 处理props和state同时改变的情况
+    stateProps = mapStateToProps(state, ownProps);  // 不论mapStateToProps是否dependsOnOwnProps，state改变总会调用mapStateToProps
 
-    if (mapDispatchToProps.dependsOnOwnProps)
+    if (mapDispatchToProps.dependsOnOwnProps)  // mapDispatchToProps与state无关，与是否dependsOnOwnProps有关，依赖props时才会调用
       dispatchProps = mapDispatchToProps(dispatch, ownProps);
 
     mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
     return mergedProps;
   }
 
+  // 处理仅是props改变的情况，mapStateToProps和mapDispatchToProps都要判断是否dependsOnOwnProps，因为上面判断props是通过浅相等
+  // 判断的，所以这里props必然是改变了的，mergedProps必然与原来的不同，所以也就不需要判断stateProps,dispatchProps是否改变
   function handleNewProps() {
-    if (mapStateToProps.dependsOnOwnProps)
+    if (mapStateToProps.dependsOnOwnProps)  // 因为state未变化，props改变时，mapStateToProps要判断是否dependsOnOwnProps，未依赖时，不需要调用
       stateProps = mapStateToProps(state, ownProps);
 
-    if (mapDispatchToProps.dependsOnOwnProps)
+    if (mapDispatchToProps.dependsOnOwnProps) // mapDispatchToProps与state无关，与是否dependsOnOwnProps有关，依赖props时才会调用
       dispatchProps = mapDispatchToProps(dispatch, ownProps);
 
     mergedProps = mergeProps(stateProps, dispatchProps, ownProps);
     return mergedProps;
   }
 
+  // 处理仅是state改变的情况，ownProps和dispatchProps未发生变化，所以需要判断stateProps是否发生变化，当其未变时，
+  // 是不需要重新计算mergedProps，这与上面的handleNewProps时props必然改变导致mergedProps必然与原来不同的情况有差别
   function handleNewState() {
-    const nextStateProps = mapStateToProps(state, ownProps);
+    const nextStateProps = mapStateToProps(state, ownProps); // 不需要判断是否dependsOnOwnProps，state改变时，不论是否依赖props，总会调用
     const statePropsChanged = !areStatePropsEqual(nextStateProps, stateProps);
+    // shallowEqual，因为上面判断state是否相等时用的strictEqual，而state即使不是一个对象，对象的键值是可能相等的，即使键值不相等，
+    // 调用函数后产生的新的stateProps的值也可能是相等的，而
     stateProps = nextStateProps;
     
     if (statePropsChanged)
