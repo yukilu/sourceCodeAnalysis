@@ -34,7 +34,8 @@ export function pureFinalPropsSelectorFactory(mapStateToProps, mapDispatchToProp
     return mergedProps;
   }
 
-  function handleNewPropsAndNewState() {  // 处理props和state同时改变的情况
+  // 处理props和state同时改变的情况，因上面判断props是否变化，所以mergedProps必然改变，不需要判断stateProps和dispatchProps是否改变
+  function handleNewPropsAndNewState() {
     stateProps = mapStateToProps(state, ownProps);  // 不论mapStateToProps是否dependsOnOwnProps，state改变总会调用mapStateToProps
 
     if (mapDispatchToProps.dependsOnOwnProps)  // mapDispatchToProps与state无关，与是否dependsOnOwnProps有关，依赖props时才会调用

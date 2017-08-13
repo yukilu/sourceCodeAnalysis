@@ -1,5 +1,9 @@
 // 去除了一些错误处理，以及observable函数
 
+/* 初始化state的Action类型，INIT的值其实可以任意定义，只要保证能进reducer中switch的default，在倒数几行时，会调用dispatch来
+ * 初始化currentState，当传入preloadedState时，dispatch({ type: ActionTypes.INIT })，此时没有监听函数，只调用reducer，由于
+ * type为'@@redux/INIT'，一般就会进reducer中的default，则会将传入的preloadedState原样返回，若没有传，则会在reducer中定义一
+ * 个初始值，dispatch({ type: '@@redux/init' })时，同样会进reducer中switch的default，将定义的初始值返回 */
 export const ActionTypes = {
   INIT: '@@redux/INIT'
 }
@@ -117,8 +121,9 @@ export default function createStore(reducer, preloadedState, enhancer) {
     dispatch({ type: ActionTypes.INIT })
   }
 
-  // When a store is created, an "INIT" action is dispatched so that every reducer returns their initial state.
-  // This effectively populates the initial state tree.
+  /* When a store is created, an "INIT" action is dispatched so that every reducer returns their initial state.
+   * This effectively populates the initial state tree.
+   * 初始化state值，具体分析见最顶上 */
   dispatch({ type: ActionTypes.INIT })
 
   return {

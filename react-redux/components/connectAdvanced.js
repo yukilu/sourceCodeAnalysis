@@ -18,6 +18,8 @@ function makeSelectorStateful(sourceSelector, store) {
          * 相等时就什么都不做，因在render中会将shouldComponentUpdate设为false，所以每次渲染之后进这里默认是false
          * props也不覆盖，即使用原来的值 */
         if (nextProps !== selector.props || selector.error) {
+          /* sourceSelector中对传入的state,props与之前的值做了浅相等判断的，所以当props和生成的stateProps浅相等时，
+           * mergedProps并不会重新生成，还是原值，所以这里直接用strictEqual即 !== 判断就可以 */
           selector.shouldComponentUpdate = true;
           selector.props = nextProps;
           selector.error = null;
