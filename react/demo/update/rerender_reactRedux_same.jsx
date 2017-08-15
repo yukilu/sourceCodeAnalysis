@@ -18,8 +18,10 @@ import PropTypes from 'prop-types';
  * 但是当Connect1.setState({})重新渲染结束后，Connect1.onStateChange会触发Connect2.onStateChange,此时，由于1中已经重新计算props
  * 并重新渲染过了，所以此处props并未改变，shouldComponentUpdate返回false，不会再重复渲染
  *
- * 由上可知，渲染顺序为，Connect1.onStateChange触发的setState({})会重新渲染组件树，等setState渲染结束后才会再调用Connect2.onStateChange
- * 此时，由于在Connect1.setState({})中Connect2重新渲染过了，这里计算的props未改变，不会再调用setState重新渲染
+ * 由上可知，即Connect2是由Connect1.onStateChange触发的setState({})来重新渲染的，而不是Connect2.onStateChange
+ * 渲染顺序为，Connect1.onStateChange触发的setState({})会重新渲染组件树，Connect2计算props并重新渲染，等setState渲染结束后
+ * 才会再调用Connect2.onStateChange，此时，由于在Connect1.setState({})中Connect2重新渲染过了，这里计算的props未改变，不会再
+ * 调用setState重新渲染
  */
 function reducer(state = { a: 0 }, action) {
     switch(action.type) {
