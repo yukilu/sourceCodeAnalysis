@@ -47,9 +47,10 @@ export function createStore(reducer, preloadedState, enhancer) {
     store.dispatch({ type: ActionTypes.INIT });  // 初始化state值
 
     
-    /* 源码中将这些判断放在最上面，所以只能传入createStore, reducer, preloadedState来创建store，这里将判断放到下面来
+    /* 当enhancer存在时，即传了中间件，就返回加强版store
+     * 源码中将这些判断放在最上面，所以只能传入createStore, reducer, preloadedState来创建store，这里将判断放到下面来
      * 就可以直接传入store，同时简化了enhancer的逻辑，与源码相比少了函数式的两层，enhancer直接返回dispatch加强后的store */
-    if (typeof enhancer !== 'undefined')  // 当enhancer存在时，即传了中间件，就返回加强版store
+    if (typeof enhancer !== 'undefined')  
         return enhancer(store);
 
     return store;
