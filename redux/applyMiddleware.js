@@ -67,9 +67,6 @@ export default function applyMiddleware(...middlewares) {
     dispatch = compose(...chain)(store.dispatch)
 
     // ...操作符展开store和...对数组作用类似，加强后的dispatch覆盖前面store中展开的原生dispatch
-    return {
-      ...store,
-      dispatch
-    }
+    return { ...store, dispatch }
   }
 }

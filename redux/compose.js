@@ -88,7 +88,7 @@ export default function compose(...funcs) {
 
 
 //一种更容易理解的实现方式
-function anotherCompose(..funcs) {
+function anotherCompose(...funcs) {
     if (funcs.length === 0)
         return arg => arg;
 
