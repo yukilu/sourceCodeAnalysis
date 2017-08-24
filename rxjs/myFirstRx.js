@@ -18,6 +18,21 @@ class Observable {
         return new Multicasted(this, subject);
     }
 
+    observeOn(scheduler) {
+        const input = this;
+
+        if (scheduler === 'async')
+            return Observable.create(function (observer) {
+                return input.subscribe({
+                    next(v) {
+                        setTimeout(() => {
+                            observer.next(v);
+                        }, 0);
+                    }
+                });
+            });
+    }
+
     scan(pureFn, inital) {
         const input = this;
         let value = inital;
@@ -52,7 +67,7 @@ class Observable {
     filter(filterFn) {
         const input = this;
         return Observable.create(function (observer) {
-            return input.subscribe({  // 这里和上面不同，直接return subscription了，是可行的，但是代码会显得有点难以理解
+            return input.subscribe({  // 直接return subscription也行，但是代码会显得难以理解
                 next(v) {
                     if (filterFn(v))
                         observer.next(v);
@@ -217,4 +232,16 @@ class ConnectableObservable {
     }
 }
 
-const Rx = { Subject, BehaviorSubject, ReplaySubject, Observable };
+const Scheduler = { async: 'async' };
+
+const Rx = { Subject, BehaviorSubject, ReplaySubject, Observable, Scheduler };
+
+const observable = Rx.Observable.create(function (observer) {
+    observer.next(1);
+    observer.next(2);
+    observer.next(3);
+});
+
+console.log('subscribe start.');
+observable.observeOn(Rx.Scheduler.async).subscribe({ next: v => console.log(v) });
+console.log('subscribe stop.');
