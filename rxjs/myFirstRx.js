@@ -52,7 +52,7 @@ class Observable {
     filter(filterFn) {
         const input = this;
         return Observable.create(function (observer) {
-            return input.subscribe({  // 直接return subscription也行，但是代码会显得难以理解
+            return input.subscribe({  // 这里和上面不同，直接return subscription了，是可行的，但是代码会显得有点难以理解
                 next(v) {
                     if (filterFn(v))
                         observer.next(v);
