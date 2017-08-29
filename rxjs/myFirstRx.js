@@ -8,8 +8,12 @@ class Observable {
         if (typeof observer === 'function' && !isSubject)
             observer = { next: observer, error, complete };
 
-        const subscription = {};
-        subscription.unsubscribe = this.main(observer);
+        let subscription = null;
+        const unsubscribe = this.main(observer);
+        if (typeof unsubscribe === 'object')  // create中传入的fn返回值为subscription时
+            subscription = unsubscribe;
+        else  // typeof unsubscribe === 'function'
+            subscription = { unsubscribe };
 
         return subscription;
     }
@@ -23,13 +27,15 @@ class Observable {
 
         if (scheduler === 'async')
             return Observable.create(function (observer) {
-                return input.subscribe({
+                const subscription = input.subscribe({
                     next(v) {
                         setTimeout(() => {
                             observer.next(v);
                         }, 0);
                     }
                 });
+
+                return subscription;
             });
     }
 
@@ -67,10 +73,73 @@ class Observable {
     filter(filterFn) {
         const input = this;
         return Observable.create(function (observer) {
-            return input.subscribe({  // 直接return subscription也行，但是代码会显得难以理解
+            return input.subscribe({  // 直接将subscription返回，与上面不同，简洁但略难以理解
                 next(v) {
                     if (filterFn(v))
                         observer.next(v);
+                }
+            });
+        });
+    }
+
+    merge(...observables) {
+        const input = this;
+        return Observable.create(function (observer) {
+            const subscriptionInput = input.subscribe(observer);
+            const subscriptions = [];
+            observables.forEach((observable, index) => {
+                subscriptions[index] = observable.subscribe(observer);
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe && subscription.unsubscribe());
+            };
+        })
+    }
+
+    buffer(observable) {
+        const input = this;
+        let buffer = [];
+        return Observable.create(function (observer) {
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    buffer.push(v);
+                }
+            });
+
+            const subscriptionTrigger = observable.subscribe({
+                next(v) {
+                    observer.next(buffer);
+                    buffer = [];
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
+                subscriptionTrigger.unsubscribe && subscriptionTrigger.unsubscribe();
+            };
+        });
+    }
+
+    debounceTime(time) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let lastTime = 0;
+            let currentTime = 0;
+            let intervalId = -1;
+            return input.subscribe({
+                next(v) {
+                    currentTime = Date.now();
+
+                    if (currentTime - lastTime < time)
+                        clearInterval(intervalId);
+
+                    intervalId = setTimeout(() => {
+                        observer.next(v);
+                    }, time);
+
+                    lastTime = currentTime;
                 }
             });
         });
@@ -89,8 +158,11 @@ Observable.from = function (array) {
 
 Observable.fromEvent = function (node, type) {
     return Observable.create(observer => {
-        node['on' + type] = function (ev) {
-            observer.next(ev);
+        listener = ev => { observer.next(ev); };
+        node.addEventListener(type, listener, false);
+
+        return function () {
+            node.removeEventListener(type, listener);
         };
     });
 };
@@ -236,12 +308,4 @@ const Scheduler = { async: 'async' };
 
 const Rx = { Subject, BehaviorSubject, ReplaySubject, Observable, Scheduler };
 
-const observable = Rx.Observable.create(function (observer) {
-    observer.next(1);
-    observer.next(2);
-    observer.next(3);
-});
-
-console.log('subscribe start.');
-observable.observeOn(Rx.Scheduler.async).subscribe({ next: v => console.log(v) });
-console.log('subscribe stop.');
+window.Rx = Rx;
