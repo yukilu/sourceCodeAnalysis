@@ -1,19 +1,66 @@
+class Observer {
+    constructor(nextOrObserver, error, complete) {
+        if (typeof nextOrObserver === 'object') {
+            this._next = nextOrObserver.next;
+            this._error = nextOrObserver.error;
+            this._complete = nextOrObserver.complete;
+        } else {
+            this._next = nextOrObserver;
+            this._error = error;
+            this._complete = complete;
+        }
+
+        this.completed = false;
+        this.next = this.next.bind(this);
+        this.error = this.error.bind(this);
+        this.complete = this.complete.bind(this);
+    }
+
+    next(v) {
+        if (!this.completed)
+            this._next && this._next(v);
+    }
+
+    error(err) {
+        if (!this.completed)
+            this._error && this._error(err);
+    }
+
+    complete(arg) {
+        if (!this.completed) {
+            this._complete && this._complete(arg);
+            this.completed = true;
+        }
+    }
+}
+
 class Observable {
     constructor(fn) {
         this.main = fn;
     }
 
-    subscribe(observer, error, complete) {
-        const isSubject = observer.isSubject;
-        if (typeof observer === 'function' && !isSubject)
-            observer = { next: observer, error, complete };
+    subscribe(nextOrObserver, error, complete) {
+        let observer = null;
+        if (typeof observerOrNext === 'function')
+            observer = new Observer(nextOrObserver, error, complete);
+        else if (!nextOrObserver.isSubject)
+            observer = new Observer(nextOrObserver);
 
         let subscription = null;
-        const unsubscribe = this.main(observer);
-        if (typeof unsubscribe === 'object')  // create中传入的fn返回值为subscription时
-            subscription = unsubscribe;
-        else  // typeof unsubscribe === 'function'
-            subscription = { unsubscribe };
+        let isCleared = false;
+        const unsubscribeFn = this.main(observer);
+        if (typeof unsubscribeFn === 'object')  // create中传入的fn返回值为subscription时
+            subscription = unsubscribeFn;
+        else  // typeof unsubscribeFn === 'function'
+            subscription = {
+                unsubscribe() {
+                    if (isCleared)
+                        return;
+
+                    isCleared = true;
+                    unsubscribeFn && unsubscribeFn();
+                }
+            };
 
         return subscription;
     }
@@ -32,7 +79,8 @@ class Observable {
                         setTimeout(() => {
                             observer.next(v);
                         }, 0);
-                    }
+                    },
+                    complete: observer.complete
                 });
 
                 return subscription;
@@ -65,7 +113,7 @@ class Observable {
     map(mapFn) {
         const input = this;
         return Observable.create(function (observer) {
-            const subscription = input.subscribe({ next: v => observer.next(mapFn(v)) });
+            const subscription = input.subscribe({ next: v => observer.next(mapFn(v)), complete: observer.complete });
             return subscription;
         });
     }
@@ -77,25 +125,14 @@ class Observable {
                 next(v) {
                     if (filterFn(v))
                         observer.next(v);
-                }
+                },
+                complete: observer.complete
             });
         });
     }
 
     merge(...observables) {
-        const input = this;
-        return Observable.create(function (observer) {
-            const subscriptionInput = input.subscribe(observer);
-            const subscriptions = [];
-            observables.forEach((observable, index) => {
-                subscriptions[index] = observable.subscribe(observer);
-            });
-
-            return function () {
-                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
-                subscriptions.forEach(subscription => subscription.unsubscribe && subscription.unsubscribe());
-            };
-        })
+        return Observable.merge(this, ...observables);
     }
 
     buffer(observable) {
@@ -140,9 +177,126 @@ class Observable {
                     }, time);
 
                     lastTime = currentTime;
-                }
+                },
+                complete: observer.complete
             });
         });
+    }
+
+    zip(observable, project) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let inputIndex = 0;
+            let obIndex = 0;
+            let inputVals = [];
+            let obVals = [];
+            let inputComplete = false;
+            let obComplete = false;
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (!obIndex) {
+                        inputVals.push(v);
+                        inputIndex++;
+                        return;
+                    }
+
+                    observer.next(project(v, obVals[0]));
+                    obVals.shift();
+                    obIndex--;
+                },
+                complete() {
+                    inputComplete = true;
+                    if (obComplete)
+                        observer.complete();
+                }
+            });
+
+            const subscription = observable.subscribe({
+                next(v) {
+                    if (!inputIndex) {
+                        obVals.push(v);
+                        obIndex++;
+                        return;
+                    }
+
+                    observer.next(project(inputVals[0], v));
+                    inputVals.shift();
+                    inputIndex--;
+                },
+                complete() {
+                    obComplete = true;
+                    if (inputComplete)
+                        observer.complete();
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
+                subscription.unsubscribe && subscription.unsubscribe();
+            };
+        });
+    }
+
+    combineLatest(observable, project) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let inputLatest, obLatest;
+            let inputComplete = false;
+            let obComplete = false;
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    inputLatest = v;
+                    if (typeof obLatest !== 'undefined')
+                        observer.next(project(inputLatest, obLatest));       
+                },
+                complete() {
+                    inputComplete = true;
+                    if (obComplete)
+                        observer.complete();
+                }
+            });
+
+            const subscription = observable.subscribe({
+                next(v) {
+                    obLatest = v;
+                    if (typeof inputLatest !== 'undefined')
+                        observer.next(project(inputLatest, obLatest));
+                },
+                complete() {
+                    obComplete = true;
+                    if (inputComplete)
+                        observer.complete();
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
+                subscription.unsubscribe && subscription.unsubscribe();
+            };
+        });
+    }
+
+    take(num) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let count = 0;
+            const subscription = input.subscribe({
+                next(v) {
+                    count++;
+                    observer.next(v);
+                    if (count === num) {
+                        observer.complete();
+                        subscription.unsubscribe && subscription.unsubscribe();
+                    }
+                }
+            });
+
+            return subscription;
+        });
+    }
+
+    concat(...observables) {
+        return Observable.concat(this, ...observables);
     }
 }
 
@@ -153,6 +307,7 @@ Observable.create = function (fn) {
 Observable.from = function (array) {
     return Observable.create(observer => {
         array.forEach(item => observer.next(item));
+        observer.complete();
     });
 };
 
@@ -176,6 +331,63 @@ Observable.interval = function (time) {
             clearInterval(id);
         };
     });
+};
+
+Observable.merge = function (...observables) {
+    return Observable.create(function (observer) {
+        const completes = new Array(observables.length);
+        const subscriptions = [];
+        completes.fill(false);
+        observables.forEach((observable, index) => {
+            subscriptions[index] = observable.subscribe({
+                next: observer.next,
+                error: observer.error,
+                complete() {
+                    completes[index] = true;
+                    if (completes.every(completed => completed))
+                        observer.complete();
+                }
+            });
+        });
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe && subscription.unsubscribe());
+        };
+    });
+};
+
+Observable.concat = function (...observables) {
+    return Observable.create(function (observer) {
+        let subscriptions = [];
+        let length = observables.length;
+        let observers = [];
+        // 因complete是个函数，其中的代码只会在调用时执行，其中的变量也只会在调用时查看当时对应的值，类似于异步，用了let，所以不需要用自执行函数
+        for (let i = 0; i < length - 1; i++)
+            observers[i] = {
+                next: observer.next,
+                error: observer.error,
+                complete() {
+                    subscriptions[i + 1] = observables[i + 1].subscribe(observers[i + 1]);
+                }
+            };
+
+        // 最后一个observer不同，complete指向observer.complete
+        observers.push({
+            next: observer.next,
+            error: observer.error,
+            complete: observer.complete
+        });
+
+        subscriptions[0] = observables[0].subscribe(observers[0]);  // 从0开始启动
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
+    });
+};
+
+Observable.zip = function (...observables) {
+    
 };
 
 class Subject {
@@ -214,7 +426,7 @@ class Subject {
     }
 }
 
-Subject.isSubject = true;
+Subject.prototype.isSubject = true;
 
 class BehaviorSubject extends Subject {
     constructor(value) {
