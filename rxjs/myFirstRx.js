@@ -99,7 +99,7 @@ class Observable {
             });
 
             return subscription;
-        })
+        });
     }
 
     multiplyByTen() {
