@@ -159,7 +159,10 @@ class Observable {
         });
     }
 
-    debounceTime(time) {
+    /* a值发出time时间段内无值发出，则time时间段后发出当前值，若a值发出time时间段内发出b值，则抛弃a值，看b值发出time时间段内是否
+     * 有值发出，无值则发出b值，若有c值发出，抛弃b值，判断c值发出time时间段内是否有值发出，无则发出c值，有则抛弃c值，继续判断后续值
+     * 即a值发出time时间段内判断是否有b值发出，无则发出a值，有就继续判断后续值...，直到出现某值x在time时间段内无值发出，发出值x */
+    debounceTime(time) {  // debounce 去抖动，即用新值刷新旧值
         const input = this;
         return Observable.create(function (observer) {
             let lastTime = 0;
@@ -178,6 +181,37 @@ class Observable {
 
                     lastTime = currentTime;
                 },
+                complete: observer.complete
+            });
+        });
+    }
+    /* debounceTime和throttleTime的区别
+     * debounceTime是前值发出后time时间段内没有后值发出就发出该值，若有，则抛弃前值，继续判断新值...
+     * throttleTime是前值发出后time时间段内的后值全部忽略，超过time时间段后的第一个值再发出，其后time时间段的值忽略... */
+
+    // a值发出后time时间段内的值都省略，超过这段时间后再发出第二个值b，b值发出后time时间段内的值省略，超过这个时间段发出第三个值c...
+    throttleTime(time) {  // 节流 即一段时间内只发出第一个值
+        const input = this;
+        return Observable.create(function (observer) {
+            let lastTime = 0;
+            let currentTime = 0;
+
+            return input.subscribe({
+                next(v) {
+                    currentTime = Date.now();
+                    if (!lastTime) {
+                        observer.next(v);
+                        lastTime = currentTime;
+                        return;
+                    }
+
+                    if (currentTime - lastTime > time) {
+                        observer.next(v);
+                        console.log(currentTime - lastTime);
+                        lastTime = currentTime;
+                    }
+                },
+                error: observer.error,
                 complete: observer.complete
             });
         });
