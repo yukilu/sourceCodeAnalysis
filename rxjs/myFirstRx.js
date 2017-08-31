@@ -396,7 +396,7 @@ Observable.zip = function (project, ...observables) {
                             arrays[j].shift();
                             indexs[j]--;
                         }
-                        
+
                         observer.next(project(...vals));
                     }
                 },
@@ -417,9 +417,13 @@ Observable.zip = function (project, ...observables) {
 class Subject {
     constructor() {
         this.observers = [];
+        this.completed = false;
     }
 
     subscribe(observer) {
+        if (typeof observer !== 'object')
+            throw new TypeError('Observer type error!');
+
         let isCleared = false;
         const observers = this.observers;
         const subscription = {};
@@ -442,7 +446,22 @@ class Subject {
     }
 
     next(v) {
-        this.observers.forEach(observer => observer.next(v));
+        if (!this.completed) {
+            this.observers.forEach(observer => observer.next && observer.next(v));
+        }
+    }
+
+    error(err) {
+        if (!this.completed) {
+            this.observers.forEach(observer => observer.error && observer.error(err));
+        }
+    }
+
+    complete(arg) {
+        if (!this.completed) {
+            this.completed = true;
+            this.observers.forEach(observer => observer.complete && observer.complete(arg));
+        }
     }
 
     length() {
