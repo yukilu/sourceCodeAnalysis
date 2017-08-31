@@ -8,8 +8,8 @@
 (function(modules) { /*webpackBootstrap*/})([
     /* 0 */
     (function(module, __webpack_exports__, __webpack_require__) {
-
         "use strict";
+        
         Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 
         // CONCATENATED MODULE: ./react/a.js
@@ -23,6 +23,5 @@
         // CONCATENATED MODULE: ./react/entry.js
 
         console.log(react_a + react_b);
-
     })
 ]);
