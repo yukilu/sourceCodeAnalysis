@@ -207,7 +207,6 @@ class Observable {
 
                     if (currentTime - lastTime > time) {
                         observer.next(v);
-                        console.log(currentTime - lastTime);
                         lastTime = currentTime;
                     }
                 },
