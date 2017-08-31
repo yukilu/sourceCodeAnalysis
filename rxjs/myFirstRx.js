@@ -216,58 +216,8 @@ class Observable {
         });
     }
 
-    zip(observable, project) {
-        const input = this;
-        return Observable.create(function (observer) {
-            let inputIndex = 0;
-            let obIndex = 0;
-            let inputVals = [];
-            let obVals = [];
-            let inputComplete = false;
-            let obComplete = false;
-            const subscriptionInput = input.subscribe({
-                next(v) {
-                    if (!obIndex) {
-                        inputVals.push(v);
-                        inputIndex++;
-                        return;
-                    }
-
-                    observer.next(project(v, obVals[0]));
-                    obVals.shift();
-                    obIndex--;
-                },
-                complete() {
-                    inputComplete = true;
-                    if (obComplete)
-                        observer.complete();
-                }
-            });
-
-            const subscription = observable.subscribe({
-                next(v) {
-                    if (!inputIndex) {
-                        obVals.push(v);
-                        obIndex++;
-                        return;
-                    }
-
-                    observer.next(project(inputVals[0], v));
-                    inputVals.shift();
-                    inputIndex--;
-                },
-                complete() {
-                    obComplete = true;
-                    if (inputComplete)
-                        observer.complete();
-                }
-            });
-
-            return function () {
-                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
-                subscription.unsubscribe && subscription.unsubscribe();
-            };
-        });
+    zip(project, ...observables) {
+        return Observable.zip(project, this, ...observables);
     }
 
     combineLatest(observable, project) {
@@ -419,8 +369,49 @@ Observable.concat = function (...observables) {
     });
 };
 
-Observable.zip = function (...observables) {
-    
+Observable.zip = function (project, ...observables) {
+    return Observable.create(function (observer) {
+        const length = observables.length;
+        const indexs = new Array(length);
+        const arrays = [];
+        const completes = new Array(length);
+        const subscriptions = [];
+
+        indexs.fill(0);
+        completes.fill(false);
+        for (let i = 0; i < length; i++)
+            arrays[i] = [];
+
+        for (let i = 0; i < length; i++)
+            subscriptions[i] = observables[i].subscribe({
+                next(v) {
+                    indexs[i]++;
+                    arrays[i].push(v);
+
+                    if(indexs.every(index => index !== 0)) {
+                        const vals = [];
+
+                        for (let j = 0; j < length; j++) {
+                            vals[j] = arrays[j][0];
+                            arrays[j].shift();
+                            indexs[j]--;
+                        }
+                        
+                        observer.next(project(...vals));
+                    }
+                },
+                error: observer.error,
+                complete() {
+                    completes[i] = true;
+                    if (completes.every(completed => completed))
+                        observer.complete();
+                }
+            });
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
+    });
 };
 
 class Subject {
