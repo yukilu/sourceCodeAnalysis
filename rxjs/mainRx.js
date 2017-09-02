@@ -7,14 +7,14 @@
  * observer，都对应同一个事件流，即上面run启动的那个，即subscribe(observer)时，observer.next(v)中传入的值，为run启动的那个事件流
  * 的当前值，而不是新启动一个事件流 */
 
-// Observable.create(function (observers) {...}); observers的真正对象类型，observers并非为数组，参数中用observers是想使其看起来更像是observer的集合
-// 在Observable中将上面参数observers的值挂载到this.observerGroup上，为了避免与this.observerGroup.observers混淆
+// Observable.create(function (observers) {...}); observers的真正对象类型为ObserverGroup，observers并非为数组，参数中用observers是想
+// 使其看起来更像是observer的集合，在Observable中将上面参数observers的值挂载到this.observerGroup上，为了避免与this.observerGroup.observers混淆
 class ObserverGroup {
     constructor(observers) {
-        this.observers = observers || [];  // Observers上主要是挂载了observers数组
+        this.observers = observers || [];  // ObserverGroup上主要是挂载了observers数组
 
         this.completed = false;
-        this.next = this.next.bind(this);  // 调用Observers的实例上的next函数，就会将this.observers上的数组中的observer逐个调用
+        this.next = this.next.bind(this);  // 调用ObserverGroup的实例上的next函数，就会将this.observers上的数组中的observer逐个调用
         this.error = this.error.bind(this);
         this.complete = this.complete.bind(this);
     }
