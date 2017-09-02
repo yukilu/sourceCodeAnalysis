@@ -113,8 +113,18 @@ class Observable {
     map(mapFn) {
         const input = this;
         return Observable.create(function (observer) {
-            const subscription = input.subscribe({ next: v => observer.next(mapFn(v)), complete: observer.complete });
-            return subscription;
+            /* Observable.create(fn) -> new Observable(fn) -> constructor(fn) { this.main = fn }
+             * -> subscribe(observer) { return this.main(observer) }
+             * 所以fn被赋给main，在subscribe中，this.main调用，即create(fn)，fn中的this指向create创建的那个对象 */ 
+            const that = this;  
+            return input.subscribe({
+                next(v) {
+                    const mapRtn = mapFn(v); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
+                    observer.next(mapRtn);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
         });
     }
 
@@ -126,6 +136,7 @@ class Observable {
                     if (filterFn(v))
                         observer.next(v);
                 },
+                error: observer.error,
                 complete: observer.complete
             });
         });
@@ -133,6 +144,68 @@ class Observable {
 
     merge(...observables) {
         return Observable.merge(this, ...observables);
+    }
+
+    mergeAll() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let index = 0;
+            let inputCompleted = false;
+            let allCompleted = false;
+            const completes = [];
+            const subscriptions = [];
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (!(v instanceof Observable))
+                        return;
+                    
+                    const subObservable = v;  // 当前面的map(arg => observable)，传入的值为observable时
+                    const subIndex = index++;  // 暂存index的值
+
+                    completes[subIndex] = false;
+                    /* 每次map发出新observable时，由于当前observable并未完成，要将allCompleted重置为false，
+                     * 若前面的都完成，按照下面的逻辑，allCompleted就变为true，此时再新发出observable时，allCompleted值就不对了
+                     * completes数组本身不固定，是一直增加的，所以allCompleted只是表示当前加载的observable都完成了，
+                     * 当新加载observable时，就要重置allCompleted = false */
+                    allCompleted = false;
+
+                    const subObserver = {
+                        next: observer.next,
+                        error: observer.error,
+                        complete(arg) {
+                            completes[subIndex] = true;
+
+                            if (completes.every(completed => completed))
+                                allCompleted = true;
+
+                            /* 二阶observables至少有一个晚于一阶observable complete
+                             * 一阶observable已经complete，且所有加载的二阶observables也都complete，就在最后这个完成的observable的
+                             * complete中调用监听的observer.complete */
+                            if (inputCompleted && allCompleted)
+                                observer.complete(arg);
+                        }
+                    };
+
+                    const subscription = subObservable.subscribe(subObserver);
+                    subscriptions.push(subscription);
+                },
+                error: observer.error,
+                complete(arg) {
+                    inputCompleted = true;
+
+                    // 一阶observable晚于所有二阶observables complete
+                    // 一阶complete时，加载的二阶observables全都complete了，就在一阶observable的complete中调用observer.complete
+                    if (allCompleted)
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe);
+            };
+        });
     }
 
     buffer(observable) {
@@ -220,43 +293,8 @@ class Observable {
         return Observable.zip(project, this, ...observables);
     }
 
-    combineLatest(observable, project) {
-        const input = this;
-        return Observable.create(function (observer) {
-            let inputLatest, obLatest;
-            let inputComplete = false;
-            let obComplete = false;
-            const subscriptionInput = input.subscribe({
-                next(v) {
-                    inputLatest = v;
-                    if (typeof obLatest !== 'undefined')
-                        observer.next(project(inputLatest, obLatest));       
-                },
-                complete() {
-                    inputComplete = true;
-                    if (obComplete)
-                        observer.complete();
-                }
-            });
-
-            const subscription = observable.subscribe({
-                next(v) {
-                    obLatest = v;
-                    if (typeof inputLatest !== 'undefined')
-                        observer.next(project(inputLatest, obLatest));
-                },
-                complete() {
-                    obComplete = true;
-                    if (inputComplete)
-                        observer.complete();
-                }
-            });
-
-            return function () {
-                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
-                subscription.unsubscribe && subscription.unsubscribe();
-            };
-        });
+    combineLatest(project, ...observables) {
+        return Observable.combineLatest(project, this, ...observables);
     }
 
     take(num) {
@@ -271,6 +309,10 @@ class Observable {
                         observer.complete();
                         subscription.unsubscribe && subscription.unsubscribe();
                     }
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.complete(arg);
                 }
             });
 
@@ -280,6 +322,18 @@ class Observable {
 
     concat(...observables) {
         return Observable.concat(this, ...observables);
+    }
+
+    race(...observables) {
+        return Observable.race(this, ...observables);
+    }
+
+    startWith(startVal) {
+        const input = this;
+        return Observable.create(function (observer) {
+            observer.next(startVal);
+            return input.subscribe(observer);
+        });
     }
 }
 
@@ -407,6 +461,96 @@ Observable.zip = function (project, ...observables) {
                         observer.complete();
                 }
             });
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
+    });
+};
+
+Observable.race = function (...observables) {
+    return Observable.create(function (observer) {
+        const length = observables.length;
+        const subscriptions = [];
+        let runAtLeastOnce = false;
+        let sync = false;  // 默认同步为false
+
+        for (let i = 0; i < length; i++) {
+            subscriptions[i] = observables[i].subscribe({
+                next(v) {
+                    // next被同步调用时，下面的if (sync)会break循环，该observable必然为第一个，后面的都不需要订阅了
+                    // 若异步调用时，就不会再进下面的if判断，全部都会被订阅，然后第一个发出值的observable将其他observable取消订阅即可
+                    sync = true;
+
+                    if (!runAtLeastOnce) {
+                        for (let j = 0; j < observables.length; j++)
+                            if (j !== i)
+                                // 考虑到同步observable的情况，该同步observable之后的并未订阅，即subscription为undefined，所以要判断下subscription是否存在
+                                subscriptions[j] && subscriptions[j].unsubscribe();
+
+                        runAtLeastOnce = true;
+                    }
+
+                    observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+
+            if (sync)
+                break;
+        }
+
+        return function () {
+            // 并不能在next中放个变量记录被订阅的observable的index，假设全是异步observable，若有一个next调用之后，当然是可以的，
+            // 但是如果想在所有next都没发出之前取消订阅，则必须全部取消，所以考虑所有情况全部取消一遍即可
+            subscriptions.forEach(subscription => subscription && subscription.unsubscribe());
+        };
+    });
+};
+
+Observable.combineLatest = function (project, ...observables) {
+    return Observable.create(function (observer) {
+        const length = observables.length;
+        const latestVals = new Array(length);
+        const completes = new Array(length);
+        const subscriptions = new Array(length);
+        const hasRunAtLeastOnces = new Array(length);  // combineLatest当每个observable至少发出一个值才能发出第一个latest值
+        let hasAllRunAtLeastOnce = false;
+
+        completes.fill(false);
+        hasRunAtLeastOnces.fill(false);
+
+        observables.forEach((observable, index) => {
+            subscriptions[index] = observable.subscribe({
+                next(v) {
+                    latestVals[index] = v;
+
+                    /* 设立一个hasAllRunAtLeastOnce并把其放在上面判断是为了性能考虑，不然每次next都要遍历一次hasRunAtLeastOnces
+                     * 所以当所有observable至少被调用一次之后，给hasAllRunAtLeastOnce赋个true，就不用遍历数组了，只要判断一个值
+                     * 如果把其放到if(hasRunAtLeastOnces.every)后面判断，每次调用next还是会遍历数组，所以放前面提高性能 */
+                    if (hasAllRunAtLeastOnce) {
+                        observer.next(project(...latestVals));
+                        return;
+                    }
+
+                    if (!hasRunAtLeastOnces[index])
+                        hasRunAtLeastOnces[index] = true;
+
+                    if (hasRunAtLeastOnces.every(hasRunAtLeastOnce => hasRunAtLeastOnce)) {  // 每个observable都运行至少一次
+                        hasAllRunAtLeastOnce = true;
+                        // 因为hasAllRunAtLeastOnce在上面先判断的，这里再赋值的，所以第一次会被漏掉，这里要手动调用
+                        observer.next(project(...latestVals));
+                    }
+                },
+                error: observer.error,
+                complete(arg) {
+                    completes[index] = true;
+                    if (completes.every(completed => completed))
+                        observer.complete(arg);
+                }
+            });
+        });
 
         return function () {
             subscriptions.forEach(subscription => subscription.unsubscribe());
