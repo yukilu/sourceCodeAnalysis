@@ -51,7 +51,7 @@ class Observable {
         const unsubscribeFn = this.main(observer);
         if (typeof unsubscribeFn === 'object')  // create中传入的fn返回值为subscription时
             subscription = unsubscribeFn;
-        else  // typeof unsubscribeFn === 'function'
+        else  // typeof unsubscribeFn === 'function' || unsubscribeFn === undefined
             subscription = {
                 unsubscribe() {
                     if (isCleared)
@@ -159,7 +159,7 @@ class Observable {
                 next(v) {
                     if (!(v instanceof Observable))
                         return;
-                    
+
                     const subObservable = v;  // 当前面的map(arg => observable)，传入的值为observable时
                     const subIndex = index++;  // 暂存index的值
 
@@ -334,6 +334,61 @@ class Observable {
             observer.next(startVal);
             return input.subscribe(observer);
         });
+    }
+
+    sample(observable) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let latest = null;
+            let index = -1;
+            let lastIndex = -2;
+            let subscription = null;
+            let sync = false;  // input可能是个同步observable，默认false是异步observable
+
+            // input为同步observable时，这里的代码直接同步执行，即在下面取样observable订阅前就执行
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    latest = v;
+                    index++;
+                },
+                error: observer.error,
+                complete(arg) {
+                    // input为同步observable时，此处complete同步执行，sync直接被赋值为true，下面if代码判断就会是true
+                    sync = true;
+                    observer.complete(arg);
+                    subscription && subscription.unsubscribe();
+                }
+            });
+
+            /* input为同步observable时，上面的complete同步调用，执行顺序在下面代码之前，sync直接被赋值为true，此时取样observable还没订阅，
+             * input就已经complete，所以没必要再取样，直接跳过取样observable的订阅
+             * input为异步observable时，上面的complete异步调用，执行顺序在下面代码之后，所以sync为false，取样observable正常订阅 */
+            if (!sync) {
+                subscription = observable.subscribe({
+                    next(v) {
+                        if (index === lastIndex)
+                            return;
+
+                        lastIndex = index;
+                        observer.next(latest);
+                    }
+                });
+            }
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscription && subscription.unsubscribe();
+            };
+        });
+    }
+
+    /* 当是input也是个定时器时，若设定的time为input的周期的倍数或者input的周期为time的倍数时，发射数据时会在相同时间节点上相遇
+     * 这时候由于定时器可能是通过多线程跑的，加入js主线程的消息队列时，先后顺序并不确定，所以会出现相同代码取样不同的情况
+     * 因此最好将time的值适当加个1，如用1001代替1000，2501替代2500，当然这么做取样数很大时就会由误差
+     * 同时要指出的是，由于定时器本身并不稳定，定时器加入的回调函数何时运行取决于js主线程的具体情况，所以sample函数也是不稳定的 */
+    sampleTime(time) {
+        const interval = Observable.interval(time);
+        return this.sample(interval);
     }
 }
 
