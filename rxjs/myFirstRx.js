@@ -41,6 +41,7 @@ class Observable {
 
     subscribe(nextOrObserver, error, complete) {
         let observer = null;
+
         if (typeof observerOrNext === 'function')
             observer = new Observer(nextOrObserver, error, complete);
         else if (!nextOrObserver.isSubject)
@@ -49,6 +50,7 @@ class Observable {
         let subscription = null;
         let isCleared = false;
         const unsubscribeFn = this.main(observer);
+
         if (typeof unsubscribeFn === 'object')  // create中传入的fn返回值为subscription时
             subscription = unsubscribeFn;
         else  // typeof unsubscribeFn === 'function' || unsubscribeFn === undefined
@@ -89,16 +91,15 @@ class Observable {
 
     scan(pureFn, inital) {
         const input = this;
-        let value = inital;
         return Observable.create(function (observer) {
-            const subscription = input.subscribe({
+            let value = inital;
+
+            return input.subscribe({
                 next(ev) {
                     observer.next(value);
                     value = pureFn(value);
                 }
             });
-
-            return subscription;
         });
     }
 
@@ -225,6 +226,20 @@ class Observable {
         });
     }
 
+    skipWhile(skipFilter) {
+        const input = this;
+        return Observable.create(function (observer) {
+            return input.subscribe({
+                next(v) {
+                    if (!skipFilter(v))
+                        observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
     distinct() {
         const input = this;
         return Observable.create(function (observer) {
@@ -266,7 +281,7 @@ class Observable {
     elementAt(n) {
         const input = this;
         return Observable.create(function (observer) {
-            let index = 0
+            let index = 0;
 
             return input.subscribe({
                 next(v) {
@@ -274,6 +289,185 @@ class Observable {
                         observer.next(v);
                         observer.complete();
                     }
+                }
+            });
+        });
+    }
+
+    take(num) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let count = 0;
+
+            return input.subscribe({
+                next(v) {
+                    count++;
+                    observer.next(v);
+                    if (count === num) {
+                        observer.complete();
+                        subscription.unsubscribe && subscription.unsubscribe();
+                    }
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    takeLast(n) {
+        const input = this;
+        return Observable.create(function (observer) {
+            const lasts = [];
+
+            return input.subscribe({
+                next(v) {
+                    if (lasts.length = n)
+                        lasts.shift();
+
+                    lasts.push(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(lasts);
+                    observer.complete(arg);
+                }
+            });
+            
+        });
+    }
+
+    takeUntil(observable) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let canLaunch = true;
+            let completeRunned = false;
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (canLaunch)
+                        observer.next(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    if (!completeRunned) {
+                        completeRunned = true;
+                        observer.complete();
+                    }
+                }
+            });
+
+            const subscription = observable.subscribe({
+                next(v) {
+                    canLaunch = false;
+
+                    if (!completeRunned) {
+                        completeRunned = true;
+                        observer.complete();
+                    }
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscription.unsubscribe();
+            };
+        });
+    }
+
+    takeWhile(takeFilter) {
+        const input = this;
+        return Observable.create(function (observer) {
+            return input.subscribe({
+                next(v) {
+                    if (takeFilter(v))
+                        observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    count(countFn) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let count = 0;
+
+            return input.subscribe({
+                next(v) {
+                    if (countFn(v))
+                        count++;
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(count);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    max() {
+        const input = this;
+        return Observable.create(function (observer) {
+            // 要找最大值，赋个最小值，最大值为Number.MAX_VALUE，则最小值为-Number.MAX_VALUE，注意Number.MIN_VALUE的值是最小的正数，无限接近于0
+            let max = -Number.MAX_VALUE;
+
+            return input.subscribe({
+                next(v) {
+                    if (v > max)
+                        max = v;
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(max);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    min() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let min = Number.MAX_VALUE;
+
+            return input.subscribe({
+                next(v) {
+                    if (v < min)
+                        min = v;
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(min);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    reduce(reduceFn, initial) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let result = initial;
+            let hasRunAtLeastOnce = false;
+
+            return input.subscribe({
+                next(v) {
+                    if (!hasRunAtLeastOnce && initial === undefined) { // 第一次运行且并未给定初值
+                        result = v;
+                        hasRunAtLeastOnce = true;
+                        return;
+                    }
+
+                    result = reduceFn(result, v);  // 第二次之后或第一次运行且给定初值
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(result);
+                    observer.complete(arg);
                 }
             });
         });
@@ -363,26 +557,72 @@ class Observable {
         });
     }
 
-    buffer(observable) {
+    debounce(debounceFn) {
         const input = this;
-        let buffer = [];
+        const subscriptions = [];
+        let completed = true;
+        let lastSubscription;
+
         return Observable.create(function (observer) {
             const subscriptionInput = input.subscribe({
                 next(v) {
-                    buffer.push(v);
-                }
-            });
+                    /* 判断前一个值发出的observable的complete状态
+                     * 若为未完成状态，则当前值在前一个observable.complete前发射，需要取消前一个observable，则其complete不执行，observer.next也不执行
+                     * 若为完成态，则当前值在前一个observable.complete后发射，前一个complete已经执行，引起observer.next的执行 */
+                    if (!completed)
+                        lastSubscription.unsubscribe();
 
-            const subscriptionTrigger = observable.subscribe({
-                next(v) {
-                    observer.next(buffer);
-                    buffer = [];
-                }
+                    // 不论前一个值发出的observable完成与否，都需要新发出一个observable，并订阅，且重置当前observable的状态为未完成
+                    const observable = debounceFn(v);
+                    completed = false;
+                    lastSubscription = observable.subscribe({
+                        complete() {
+                            completed = true;
+                            observer.next(v);
+                        }
+                    });
+                },
+                error: observer.error,
+                complete: observer.complete
             });
 
             return function () {
-                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
-                subscriptionTrigger.unsubscribe && subscriptionTrigger.unsubscribe();
+                subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe());
+            };
+        });
+    }
+
+    throttle(throttleFn) {
+        const input = this;
+        const subscriptions = [];
+        let canLaunch = true;
+
+        return Observable.create(function (observer) {
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (!canLaunch)
+                        return;
+
+                    canLaunch = false;
+                    observer.next(v);
+
+                    const observable = throttleFn(v);
+                    const subscription = observable.subscribe({
+                        complete() {
+                            canLaunch = true;
+                        }
+                    });
+
+                    subscriptions.push(subscription);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe());
             };
         });
     }
@@ -391,19 +631,24 @@ class Observable {
      * 有值发出，无值则发出b值，若有c值发出，抛弃b值，判断c值发出time时间段内是否有值发出，无则发出c值，有则抛弃c值，继续判断后续值
      * 即a值发出time时间段内判断是否有b值发出，无则发出a值，有就继续判断后续值...，直到出现某值x在time时间段内无值发出，发出值x */
     debounceTime(time) {  // debounce 去抖动，即用新值刷新旧值
+        /* return this.debounce(v => Observable.timer(time));
+         * 不用上面代码写的原因还是定时器不稳定的因素，特别是一阶observable的complete和二阶observable的发射数据在同一时间节点上时，
+         * 谁先谁后是不一定的，所以同一个代码运行几次的结果可能都不同，而直接在input事件流中判断时间不会发生上述问题，运行几次输出
+         * 的结果基本都是相同的，throttleTime同理 */
+
         const input = this;
         return Observable.create(function (observer) {
             let lastTime = 0;
             let currentTime = 0;
-            let intervalId = -1;
+            let timeoutId = -1;
             return input.subscribe({
                 next(v) {
                     currentTime = Date.now();
 
                     if (currentTime - lastTime < time)
-                        clearInterval(intervalId);
+                        clearTimeout(timeoutId);
 
-                    intervalId = setTimeout(() => {
+                    timeoutId = setTimeout(() => {
                         observer.next(v);
                     }, time);
 
@@ -419,6 +664,9 @@ class Observable {
 
     // a值发出后time时间段内的值都省略，超过这段时间后再发出第二个值b，b值发出后time时间段内的值省略，超过这个时间段发出第三个值c...
     throttleTime(time) {  // 节流 即一段时间内只发出第一个值
+        // 不这么写的理由同debounceTime
+        // return this.throttle(v => Observable.timer(time));
+        
         const input = this;
         return Observable.create(function (observer) {
             let lastTime = 0;
@@ -441,53 +689,6 @@ class Observable {
                 error: observer.error,
                 complete: observer.complete
             });
-        });
-    }
-
-    zip(project, ...observables) {
-        return Observable.zip(project, this, ...observables);
-    }
-
-    combineLatest(project, ...observables) {
-        return Observable.combineLatest(project, this, ...observables);
-    }
-
-    take(num) {
-        const input = this;
-        return Observable.create(function (observer) {
-            let count = 0;
-            const subscription = input.subscribe({
-                next(v) {
-                    count++;
-                    observer.next(v);
-                    if (count === num) {
-                        observer.complete();
-                        subscription.unsubscribe && subscription.unsubscribe();
-                    }
-                },
-                error: observer.error,
-                complete(arg) {
-                    observer.complete(arg);
-                }
-            });
-
-            return subscription;
-        });
-    }
-
-    concat(...observables) {
-        return Observable.concat(this, ...observables);
-    }
-
-    race(...observables) {
-        return Observable.race(this, ...observables);
-    }
-
-    startWith(startVal) {
-        const input = this;
-        return Observable.create(function (observer) {
-            observer.next(startVal);
-            return input.subscribe(observer);
         });
     }
 
@@ -545,6 +746,91 @@ class Observable {
         const interval = Observable.interval(time);
         return this.sample(interval);
     }
+
+    buffer(observable) {
+        const input = this;
+        let buffer = [];
+        return Observable.create(function (observer) {
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    buffer.push(v);
+                }
+            });
+
+            const subscriptionTrigger = observable.subscribe({
+                next(v) {
+                    observer.next(buffer);
+                    buffer = [];
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
+                subscriptionTrigger.unsubscribe && subscriptionTrigger.unsubscribe();
+            };
+        });
+    }
+
+    bufferCount(bufferSize, startBufferEvery) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let index = 0;
+            let count = 0;
+            let buffer = [];
+
+            return input.subscribe({
+                next(v) {
+                    buffer[count++] = v;
+
+                    if (count === bufferSize) {
+                        count = 0;
+                        // Array.from生成新数组，是因为每次next修改的可能是上一个数组的值，而数组传递的又是指针，会造成得到的数组可能被后续修改
+                        observer.next(Array.from(buffer));
+
+                        if (++index % startBufferEvery === 0)  // 每startBufferEvery个数组，新建一个数组缓冲数据
+                            buffer = new Array(bufferSize);
+                    }
+                },
+                error: observer.error,
+                complete(arg) { 
+                    // count的值只能是[0, bufferSize - 1]，因为在next中，count为bufferSize时，必然会将数组发出
+                    // 而由于上面先赋值，count再++，所以count的值即为数组长度
+                    
+                    /* const lastVals = [];
+                     * for (let i = 0; i < count; i++)
+                     *     lastVals[i] = buffer[i];    */
+                    const lastVals = buffer.slice(0, count);  // 效果与上面的循环相同，slice(0, 0)为空数组，slice(i, i)结果就是空数组
+
+                    observer.next(lastVals);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    zip(project, ...observables) {
+        return Observable.zip(project, this, ...observables);
+    }
+
+    combineLatest(project, ...observables) {
+        return Observable.combineLatest(project, this, ...observables);
+    }
+
+    concat(...observables) {
+        return Observable.concat(this, ...observables);
+    }
+
+    race(...observables) {
+        return Observable.race(this, ...observables);
+    }
+
+    startWith(startVal) {
+        const input = this;
+        return Observable.create(function (observer) {
+            observer.next(startVal);
+            return input.subscribe(observer);
+        });
+    }
 }
 
 Observable.create = function (fn) {
@@ -579,6 +865,26 @@ Observable.interval = function (time) {
         };
     });
 };
+
+Observable.timer = function (beginTime, time) {
+    return Observable.create(function (observer) {
+        let n = 1;
+        let intervalId;
+        const timeoutId = setTimeout(() =>  {
+            observer.next(0);
+            if (time === undefined)
+                observer.complete();
+            else
+                intervalId = setInterval(() => observer.next(n++), time);
+        }, beginTime);
+        
+        return function () {
+            clearTimeout(timeoutId);
+            if (interval !== undefined)
+                clearInterval(intervalId);
+        };
+    });
+}
 
 Observable.merge = function (...observables) {
     return Observable.create(function (observer) {
