@@ -110,6 +110,175 @@ class Observable {
         });
     }
 
+    filter(filterFn) {
+        const input = this;
+        return Observable.create(function (observer) {
+            return input.subscribe({  // 直接将subscription返回，与上面不同，简洁但略难以理解
+                next(v) {
+                    if (filterFn(v))
+                        observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    find(findFn) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let first = true;
+
+            return input.subscribe({
+                next(v) {
+                    if (findFn(v) && first) {
+                        first = false;
+                        observer.next(v);
+                        observer.complete();
+                    }
+                }
+            });
+        });
+    }
+
+    findIndex(findFn) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let first = true;
+            let index = 0;
+
+            return input.subscribe({
+                next(v) {
+                    if (findFn(v) && first) {
+                        first = false;
+                        observer.next(index);
+                        observer.complete();
+                    }
+
+                    index++;
+                }
+            });
+        });
+    }
+
+    last() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let lastVal;
+
+            return input.subscribe({
+                next(v) {
+                    lastVal = v;
+                },
+                complete(arg) {
+                    observer.next(lastVal);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    skip(n) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let index = 0;
+
+            return input.subscribe({
+                next(v) {
+                    if (index++ < n)
+                        return;
+
+                    observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    skipUntil(observable) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let launched = false;
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (launched)
+                        observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.commplete
+            });
+
+            const subscription = observable.subscribe({
+                next(v) {
+                    launched = true;
+                    // observable为同步时，调用该next函数时，subscription为undefined，所以要判断是否存在，异步时，为订阅后的subscription
+                    subscription && subscription.unsubscribe();
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscription.unsubscribe();
+            };
+        });
+    }
+
+    distinct() {
+        const input = this;
+        return Observable.create(function (observer) {
+            const vals = [];
+
+            return input.subscribe({
+                next(v) {
+                    if (vals.indexOf(v) !== -1)
+                        return;
+
+                    vals.push(v);
+                    observer.next(v);
+                },
+                error: observer.next,
+                complete: observer.complete
+            });
+        });
+    }
+
+    distinctUntilChanged() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let latest;
+
+            return input.subscribe({
+                next(v) {
+                    if (latest === v)
+                        return;
+
+                    latest = v;
+                    observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    elementAt(n) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let index = 0
+
+            return input.subscribe({
+                next(v) {
+                    if (index++ === n) {
+                        observer.next(v);
+                        observer.complete();
+                    }
+                }
+            });
+        });
+    }
+
     map(mapFn) {
         const input = this;
         return Observable.create(function (observer) {
@@ -121,20 +290,6 @@ class Observable {
                 next(v) {
                     const mapRtn = mapFn(v); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
                     observer.next(mapRtn);
-                },
-                error: observer.error,
-                complete: observer.complete
-            });
-        });
-    }
-
-    filter(filterFn) {
-        const input = this;
-        return Observable.create(function (observer) {
-            return input.subscribe({  // 直接将subscription返回，与上面不同，简洁但略难以理解
-                next(v) {
-                    if (filterFn(v))
-                        observer.next(v);
                 },
                 error: observer.error,
                 complete: observer.complete
