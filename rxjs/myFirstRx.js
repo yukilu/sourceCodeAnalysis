@@ -988,7 +988,7 @@ Observable.sequenceEqualLikeZip = function (...observables) {
                     completes[i] = true;
 
                     if (completes.every(completed => completed)) {  // 最后一个完成的observable调用complete时调用observer.complete
-                        // isEqual为true时需要进一步判断observable发射数据的长度，不相等时，认为是不相等的，但isEqual本就为false时，也就不需要判断了
+                        // isEqual为true时需要进一步判断observable发射数据的长度，不相等时，认为是不相等的，但isEqual本就为false时，不需要判断
                         if (isEqual && indexes.some(index => index !== 0))
                             isEqual = false;
 
