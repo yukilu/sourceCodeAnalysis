@@ -614,7 +614,8 @@ class Observable {
             const subscriptionInput = input.subscribe({
                 next(v) {
                     /* 判断前一个值发出的observable的complete状态
-                     * 若为未完成状态，则当前值在前一个observable.complete前发射，需要取消前一个observable，则其complete不执行，observer.next也不执行
+                     * 若为未完成状态，则当前值在前一个observable.complete前发射，需要取消前一个observable，则其complete不执行，
+                     * observer.next也不执行
                      * 若为完成态，则当前值在前一个observable.complete后发射，前一个complete已经执行，引起observer.next的执行 */
                     if (!completed)
                         lastSubscription.unsubscribe();
