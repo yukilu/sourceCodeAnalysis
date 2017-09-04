@@ -71,6 +71,28 @@ class Observable {
         return new Multicasted(this, subject);
     }
 
+    defaultIfEmpty(val) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let isEmpty = true;
+            return input.subscribe({
+                next(v) {
+                    if (isEmpty)  // 防止第一次赋值后后续重复赋值
+                        isEmpty = false;
+
+                    observer.next(v)
+                },
+                error: observer.error,
+                complete(arg) {
+                    if (isEmpty)
+                        observer.next(val);
+
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
     observeOn(scheduler) {
         const input = this;
 
@@ -123,6 +145,29 @@ class Observable {
                 complete: observer.complete
             });
         });
+    }
+
+    every(everyFn) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let result = true;
+
+            return input.subscribe({
+                next(v) {
+                    if (!everyFn(v))
+                        result = false;
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.next(result);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    sequenceEqual(...observable) {
+        return Observable.sequenceEqual(this, ...observable);
     }
 
     find(findFn) {
@@ -299,13 +344,13 @@ class Observable {
         return Observable.create(function (observer) {
             let count = 0;
 
-            return input.subscribe({
+            const subscription = input.subscribe({
                 next(v) {
                     count++;
                     observer.next(v);
                     if (count === num) {
                         observer.complete();
-                        subscription.unsubscribe && subscription.unsubscribe();
+                        subscription && subscription.unsubscribe();
                     }
                 },
                 error: observer.error,
@@ -313,6 +358,8 @@ class Observable {
                     observer.complete(arg);
                 }
             });
+
+            return subscription;
         });
     }
 
@@ -844,6 +891,10 @@ Observable.from = function (array) {
     });
 };
 
+Observable.of = function (...args) {
+    return Observable.from(args);
+};
+
 Observable.fromEvent = function (node, type) {
     return Observable.create(observer => {
         listener = ev => { observer.next(ev); };
@@ -883,6 +934,37 @@ Observable.timer = function (beginTime, time) {
             if (interval !== undefined)
                 clearInterval(intervalId);
         };
+    });
+}
+
+Observable.sequenceEqual = function (...observables) {
+    return Observable.create(function (observer) {
+        const length = observables.length;
+        const indexes = new Array(length);
+    });
+}
+
+// 通过zip来判断每个对应位置的元素是否相等，但是无法判断长度是否相等，除非修改zip函数，例如在zip中每个observable监听的complete中添加
+// observer.next(rest)，即在zip生成的observable的complete时发射一个布尔变量来标示是否多余数据
+Observable.sequenceEqualSameLength = function (...observables) {
+    function equal(...args) {
+        const item = args[0];
+        return args.every(arg => arg === item);
+    }
+
+    return Observable.create(function (observer) {
+        let isEqual = true;
+        return Observable.zip(equal, ...observables).subscribe({
+            next(v) {
+                if (!v)
+                    isEqual = false;
+            },
+            error: observer.error,
+            complete(arg) {
+                observer.next(isEqual);
+                observer.complete(arg);
+            }
+        });
     });
 }
 
@@ -942,12 +1024,12 @@ Observable.concat = function (...observables) {
 Observable.zip = function (project, ...observables) {
     return Observable.create(function (observer) {
         const length = observables.length;
-        const indexs = new Array(length);
+        const indexes = new Array(length);
         const arrays = [];
         const completes = new Array(length);
         const subscriptions = [];
 
-        indexs.fill(0);
+        indexes.fill(0);
         completes.fill(false);
         for (let i = 0; i < length; i++)
             arrays[i] = [];
@@ -955,16 +1037,17 @@ Observable.zip = function (project, ...observables) {
         for (let i = 0; i < length; i++)
             subscriptions[i] = observables[i].subscribe({
                 next(v) {
-                    indexs[i]++;
+                    indexes[i]++;
                     arrays[i].push(v);
+                    // console.log(i, indexes[i] - 1,arrays[i]);
 
-                    if(indexs.every(index => index !== 0)) {
+                    if(indexes.every(index => index !== 0)) {
                         const vals = [];
 
                         for (let j = 0; j < length; j++) {
                             vals[j] = arrays[j][0];
                             arrays[j].shift();
-                            indexs[j]--;
+                            indexes[j]--;
                         }
 
                         observer.next(project(...vals));
@@ -973,6 +1056,7 @@ Observable.zip = function (project, ...observables) {
                 error: observer.error,
                 complete() {
                     completes[i] = true;
+                    // console.log(completes[i], completes);
                     if (completes.every(completed => completed))
                         observer.complete();
                 }
@@ -1222,5 +1306,3 @@ class ConnectableObservable {
 const Scheduler = { async: 'async' };
 
 const Rx = { Subject, BehaviorSubject, ReplaySubject, Observable, Scheduler };
-
-window.Rx = Rx;
