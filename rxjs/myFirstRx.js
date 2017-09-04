@@ -937,10 +937,70 @@ Observable.timer = function (beginTime, time) {
     });
 }
 
+// 用数组存储所有发出的数，然后进行判断，不对所有数组的0位置及之后位置都储存数据时删除，但是发出数据数量不能过多，
+// 不然数组长度过长会造成性能问题，处理长度过长时，可以像下面那种写法，其实最好的办法是设定一个特定长度，超过时再新建数组存储
 Observable.sequenceEqual = function (...observables) {
+
+};
+
+// 与zip写法类似，0位置的数都存在时，就处理所有0位置的数，然后将0位置的数全部shift删除，以保证发出数据数量过多时，数组长度不会过长
+Observable.sequenceEqualLikeZip = function (...observables) {
     return Observable.create(function (observer) {
         const length = observables.length;
         const indexes = new Array(length);
+        const completes = new Array(length);
+        const arrays = new Array(length);
+        const subscriptions = new Array(length);
+        let isEqual = true;
+
+        indexes.fill(0);
+        completes.fill(false);
+        for (let i = 0; i < length; i++)
+            arrays[i] = [];
+
+        for (let i = 0; i < length; i++)
+            subscription[i] = observable[i].subscribe({
+                next(v) {
+                    if (!isEqual)  // 如果isEqual为false，即已经判定不相等了，next下的代码都不需要执行了
+                        return;
+
+                    indexes[i]++;
+                    array[i].push(v);
+
+                    if (indexes.every(index => index !== 0)) {
+                        const item = array[0][0];
+                        array[0].shift();
+                        indexes[0]--;
+
+                        for (let j = 1; j < length; j++) {
+                            if (array[j][0] !== item) {
+                                isEqual = false;
+                                break;
+                            }
+
+                            array[j].shift();
+                            indexes[j]--;
+                        }
+                    }
+                },
+                error: observer.error,
+                complete(arg) {
+                    completes[i] = true;
+
+                    if (completes.every(completed => completed)) {  // 最后一个完成的observable调用complete时调用observer.complete
+                        // isEqual相等时需要进一步判断observable发射数据的长度，不相等时，认为是不相等的，但isEqual本就不相等，也就不需要判断了
+                        if (isEqual && indexes.some(index => index !== 0))
+                            isEqual = false;
+
+                        observer.next(isEqual);
+                        observer.complete(arg);
+                    }
+                }
+            });
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
     });
 }
 
@@ -1025,8 +1085,8 @@ Observable.zip = function (project, ...observables) {
     return Observable.create(function (observer) {
         const length = observables.length;
         const indexes = new Array(length);
-        const arrays = [];
         const completes = new Array(length);
+        const arrays = [];
         const subscriptions = [];
 
         indexes.fill(0);
