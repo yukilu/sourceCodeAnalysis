@@ -1145,7 +1145,8 @@ Observable.race = function (...observables) {
                     if (!runAtLeastOnce) {
                         for (let j = 0; j < observables.length; j++)
                             if (j !== i)
-                                // 考虑到同步observable的情况，该同步observable之后的并未订阅，即subscription为undefined，所以要判断下subscription是否存在
+                                // 考虑到同步observable的情况，该同步observable之后的并未订阅，即subscription为undefined，
+                                // 所以要判断下subscription是否存在
                                 subscriptions[j] && subscriptions[j].unsubscribe();
 
                         runAtLeastOnce = true;
