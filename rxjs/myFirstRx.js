@@ -798,10 +798,20 @@ class Observable {
     buffer(observable) {
         const input = this;
         let buffer = [];
+        let completed = false;
+
         return Observable.create(function (observer) {
             const subscriptionInput = input.subscribe({
                 next(v) {
                     buffer.push(v);
+                },
+                error: observer.error,
+                // input和observable谁先完成就直接调用observer.complete，为了防止重复调用complete要做判断处理
+                // input先完成，就把observable unsubscribe，observable.complete也不会调用，input后完成，complete不需要再重复调用
+                complete(arg) {
+                    if (!completed)
+                        observer.complete(arg);
+                    subscriptionTrigger && subscriptionTrigger.unsubscribe();
                 }
             });
 
@@ -809,12 +819,17 @@ class Observable {
                 next(v) {
                     observer.next(buffer);
                     buffer = [];
+                },
+                complete(arg) {  // observable的complete先完成时，要将最后一次缓存的数据发出去
+                    completed = true;
+                    observer.next(buffer);
+                    observer.complete(arg);
                 }
             });
 
             return function () {
-                subscriptionInput.unsubscribe && subscriptionInput.unsubscribe();
-                subscriptionTrigger.unsubscribe && subscriptionTrigger.unsubscribe();
+                subscriptionInput.unsubscribe();
+                subscriptionTrigger && subscriptionTrigger.unsubscribe();
             };
         });
     }
@@ -853,6 +868,151 @@ class Observable {
                     observer.complete(arg);
                 }
             });
+        });
+    }
+
+    bufferTime(time) {
+        // return Observable.buffer(Observable.interval(time));
+        
+        // 这里还是存在定时器不稳定的问题，而且官方版的rxjs也存在这个问题
+        const input = this;
+        return Observable.create(function (observer) {
+            let buffer = [];
+
+            const id = setInterval(() => {
+                observer.next(buffer);
+                buffer = [];
+            }, time);
+
+            const subscription = input.subscribe({
+                next(v) {
+                    buffer.push(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    clearInterval(id);
+                    observer.complete(arg);
+                }
+            });
+
+            return function () {
+                clearInterval(id);
+                subscription.unsubscribe();
+            };
+        });
+    }
+
+    bufferToggle(opening, closing) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let paired = true;
+            let buffering = false;
+            let buffer;
+
+            const subscriptionOpening = opening.subscribe({
+                next(v) {
+                    /* 对pair进行判断是为了防止opening重复发出，比如连发两个的情况，
+                     * 在opening当前发射的值中，若paired为false，表示还未配对，即前一个发射值的还属于opening，忽略当前值
+                     * 若paired是true，表示上一对配对了，即前一个发射的值属于closing，当前值可以作为起始 */
+                    if (paired) {
+                        paired = false;
+                        buffering = true;
+                        buffer = [];
+                    }
+                }
+            });
+
+            const subscriptionClosing = closing.subscribe({
+                next(v) {
+                    /* 同上，为了防止closing重复发出
+                     * 在closing当前发射的值中，做paired为true，表示已经配对，即前一个发射的值还属于closing，忽略当前值
+                     * 若paired为false时，表示未配对，即前一个发射的值属于opening，当前值可以作为结束 */
+                    if (!paired) {
+                        paired = true;
+                        buffering = false;
+                        observer.next(buffer);
+                    }
+                }
+            });
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (buffering)
+                        buffer.push(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.complete(arg);
+                    subscriptionOpening.unsubscribe();
+                    subscriptionClosing.unsubscribe();
+                }
+            })
+
+            return function () {
+                subscriptionOpening.unsubscribe();
+                subscriptionClosing.unsubscribe();
+            };
+        });
+    }
+
+    bufferWhen(closingSelector) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let observable = closingSelector();
+            let completed = false;
+            let buffer = [];
+            let subscription;
+            // 判断closingSelector返回的observable及input是否为同步observable，若为同步，都没意义，next中直接return
+            let syncInput = true;
+            let syncObservable = true;
+            let runOnce = true;
+
+            let subObserver = {
+                next(v) {
+                    // 同步时，这里的值为true，异步时，该函数在这里代码运行完之后运行，下面已经赋为false
+                    if (syncObservable) {
+                        if (runOnce) {
+                            runOnce = false;
+                            console.warn('bufferWhen: closingSelector can\'t return a sync observable.');
+                        }
+                        return;  // 用return来切断连续订阅调用，只要有一个observable为同步，即停止后续订阅
+                    }
+
+                    observer.next(buffer);
+                    buffer= [];
+                    subscription && subscription.unsubscribe();  // 取消当前observable
+
+                    observable = closingSelector();  // 创建新observable，并再订阅自己
+                    syncObservable = true;  // 重置syncObservable，因为每次新返回的observable都可能是重复的，要重新判断
+                    // 再订阅自己，执行过程类似于递归，无限进行，所以要在input.complete中unsubscribe，不然会内存溢出
+                    subscription = observable.subscribe(subObserver);
+                    syncObservable = false;
+                }
+            };
+
+            subscription = observable.subscribe(subObserver);
+            syncObservable = false;  // 这一行不要忘记加，因为第一次判断是否同步时依赖这个赋值
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (syncInput)  // 原理同上
+                        return;
+
+                    buffer.push(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    observer.complete(arg);
+                    subscription.unsubscribe();  // 完成时将当前observable进行unsubscribe，不然observable会一个接一个无限递归下去
+                }
+            });
+
+            syncInput = false;  // 同步时，上面的if(sync)在该赋值表达式之前运行，if判断为true，异步时，在该赋值后运行，if判断为false
+
+            return function () {
+                subscription.unsubscribe();
+                subscriptionInput.unsubscribe();
+            }
         });
     }
 
@@ -981,7 +1141,7 @@ Observable.sequenceEqual = function (...observables) {
         for (let i = 0; i < length; i++)
             subscriptions[i] = observables[i].subscribe({
                 next(v) {
-                    if (!isEqual)  // 如果已经判定为不相等了，那下面的代码没有运行的必要了
+                    if (!isEqual)  // 如果已经判定为不相等了，那下面的代码就没必要运行了
                         return;
 
                     indexes[i]++;
