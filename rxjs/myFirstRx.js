@@ -908,9 +908,32 @@ Observable.fromEvent = function (node, type) {
 };
 
 Observable.interval = function (time) {
+    return Observable.intervalStartFrom(0, time);
+};
+
+Observable.intervalStartFrom = function(startNum, time) {
     return Observable.create(observer => {
-        let n = 0;
+        let n = startNum;
         const id = setInterval(() => observer.next(n++), time);
+
+        return function () {
+            clearInterval(id);
+        };
+    });
+};
+
+Observable.intervalFrom = function (array, time) {
+    return Observable.create(function (observer) {
+        let i = 0;
+        const length = array.length;
+        const id = setInterval(() => {
+            observer.next(array[i++]);
+
+            if (i === length) {
+                clearInterval(id);
+                observer.complete();
+            }
+        }, time);
 
         return function () {
             clearInterval(id);
@@ -939,9 +962,68 @@ Observable.timer = function (beginTime, time) {
 }
 
 // 用数组存储所有发出的数，然后进行判断，不对所有数组的0位置及之后位置都储存数据时删除，但是发出数据数量不能过多，
-// 不然数组长度过长会造成性能问题，处理长度过长时，可以像下面那种写法，其实最好的办法是设定一个特定长度，超过时再新建数组存储
+// 不然数组长度过长会造成性能问题，处理长度过长时，可以像下面那种写法，设定一个特定长度，超过时再新建数组存储
 Observable.sequenceEqual = function (...observables) {
+    return Observable.create(function (observer) {
+        const SIZE = 100;
+        const length = observables.length;
+        const indexes = new Array(length);
+        const completes = new Array(length);
+        const arrays = [];
+        const subscriptions = [];
+        let isEqual = true;
 
+        indexes.fill(-1);
+        completes.fill(false);
+        for (let i = 0; i < length; i++)
+            arrays[i] = [];
+
+        for (let i = 0; i < length; i++)
+            subscriptions[i] = observables[i].subscribe({
+                next(v) {
+                    if (!isEqual)  // 如果已经判定为不相等了，那下面的代码没有运行的必要了
+                        return;
+
+                    indexes[i]++;
+                    arrays[i].push(v);
+
+                    const currentIndex = indexes[i];
+                    // 成立时，arrays每一个数组的index位都存在数据，当前数组是最后一个在该位push数据的，对该位所有数据进行操作
+                    if (indexes.every(index => index >= currentIndex)) {
+                        const item = arrays[0][currentIndex];
+                        for (let j = 1; j < length; j++)
+                            if (arrays[j][currentIndex] !== item) {
+                                isEqual = false;
+                                break;
+                            }
+
+                        // 嵌套在上层if内，是为了保证所有数组储存的数据长度都达到或超过了SIZE
+                        if (currentIndex === SIZE - 1) {
+                            for (let j = 0; j < length; j++)
+                                arrays[j] = arrays[j].slice(SIZE);
+                        }
+                    }
+                },
+                error: observer.error,
+                complete(arg) {
+                    completes[i] = true;
+                    if (completes.every(completed => completed)) {
+                        for (let j = 0; j < length - 1; j++)
+                            if (arrays[j].length !== arrays[j + 1].length) {
+                                isEqual = false;
+                                break;
+                            }
+
+                        observer.next(isEqual);
+                        observer.complete(arg);
+                    }
+                }
+            });
+
+        return function () {
+            subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
+    });
 };
 
 // 与zip写法类似，0位置的数都存在时，就处理所有0位置的数，然后将0位置的数全部shift删除，以保证发出数据数量过多时，数组长度不会过长
@@ -954,7 +1036,7 @@ Observable.sequenceEqualLikeZip = function (...observables) {
         const subscriptions = new Array(length);
         let isEqual = true;
 
-        indexes.fill(0);
+        indexes.fill(-1);
         completes.fill(false);
         for (let i = 0; i < length; i++)
             arrays[i] = [];
@@ -965,10 +1047,10 @@ Observable.sequenceEqualLikeZip = function (...observables) {
                     if (!isEqual)  // 如果isEqual为false，即已经判定不相等了，next下的代码都不需要执行了
                         return;
 
-                    indexes[i]++;
+                    indexes[i]++;  // 这里的index，array[i]添加删除数据的逻辑与zip函数相同
                     array[i].push(v);
 
-                    if (indexes.every(index => index !== 0)) {
+                    if (indexes.every(index => index !== -1)) {
                         const item = array[0][0];
                         array[0].shift();
                         indexes[0]--;
@@ -990,7 +1072,7 @@ Observable.sequenceEqualLikeZip = function (...observables) {
 
                     if (completes.every(completed => completed)) {  // 最后一个完成的observable调用complete时调用observer.complete
                         // isEqual为true时需要进一步判断observable发射数据的长度，不相等时，认为是不相等的，但isEqual本就为false时，不需要判断
-                        if (isEqual && indexes.some(index => index !== 0))
+                        if (isEqual && indexes.some(index => index !== -1))
                             isEqual = false;
 
                         observer.next(isEqual);
@@ -1090,7 +1172,7 @@ Observable.zip = function (project, ...observables) {
         const arrays = [];
         const subscriptions = [];
 
-        indexes.fill(0);
+        indexes.fill(-1);
         completes.fill(false);
         for (let i = 0; i < length; i++)
             arrays[i] = [];
@@ -1098,11 +1180,18 @@ Observable.zip = function (project, ...observables) {
         for (let i = 0; i < length; i++)
             subscriptions[i] = observables[i].subscribe({
                 next(v) {
-                    indexes[i]++;
+                    indexes[i]++;  // 每次发射数据时，对当前对应的序号先++，然后push(v)，index指向当前位，该位存在数据
                     arrays[i].push(v);
-                    // console.log(i, indexes[i] - 1,arrays[i]);
 
-                    if(indexes.every(index => index !== 0)) {
+                    /* 没有一个index指向-1，即没有数组为空，满足条件时即当前的observable对应最后一个将数据push进去的空数组
+                     * 这种情况下0位都存在数据，将所有0位数据存储进vals数组，然后全部删除，序号全部减一
+                     * 有点像俄罗斯方块，这种方法只有0位能全部满数据，全满就全部删除，这样操作总能保证数据全满在0位置
+                     *     0    1    2           0    1    2            0    1    2
+                     * 0  v00  v01  v02      0  v00  v01  v02      -0  v01  v02
+                     * 1  v10  v11      ->   1  v10  v11       ->  -1  v11
+                     * 2                    +2  v20                -2
+                     */
+                    if(indexes.every(index => index !== -1)) {
                         const vals = [];
 
                         for (let j = 0; j < length; j++) {
@@ -1117,7 +1206,6 @@ Observable.zip = function (project, ...observables) {
                 error: observer.error,
                 complete() {
                     completes[i] = true;
-                    // console.log(completes[i], completes);
                     if (completes.every(completed => completed))
                         observer.complete();
                 }
