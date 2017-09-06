@@ -71,7 +71,7 @@ class Observable {
         return new Multicasted(this, subject);
     }
 
-    defaultIfEmpty(val) {
+    defaultIfEmpty(val = true) {
         const input = this;
         return Observable.create(function (observer) {
             let isEmpty = true;
@@ -80,7 +80,7 @@ class Observable {
                     if (isEmpty)  // 防止第一次赋值后后续重复赋值
                         isEmpty = false;
 
-                    observer.next(v)
+                    observer.next(v);
                 },
                 error: observer.error,
                 complete(arg) {
@@ -166,8 +166,8 @@ class Observable {
         });
     }
 
-    sequenceEqual(...observable) {
-        return Observable.sequenceEqual(this, ...observable);
+    sequenceEqual(...observables) {
+        return Observable.sequenceEqual(this, ...observables);
     }
 
     find(findFn) {
@@ -253,7 +253,7 @@ class Observable {
         });
     }
 
-    skip(n) {
+    skip(n = 0) {
         const input = this;
         return Observable.create(function (observer) {
             let index = 0;
@@ -352,7 +352,7 @@ class Observable {
         });
     }
 
-    elementAt(n) {
+    elementAt(n = 0) {
         const input = this;
         return Observable.create(function (observer) {
             let index = 0;
@@ -368,7 +368,10 @@ class Observable {
         });
     }
 
-    take(num) {
+    take(n = 0) {
+        if (!n)
+            return Observable.empty();
+
         const input = this;
         return Observable.create(function (observer) {
             let count = 0;
@@ -377,7 +380,7 @@ class Observable {
                 next(v) {
                     count++;
                     observer.next(v);
-                    if (count === num) {
+                    if (count === n) {
                         /* 将subscription放在前面，再调用complete，是为了防止complete出错时，中止函数，造成unsubscribe无法调用
                          * unsubscribe调用后，由于当前next下代码已经执行，都会执行完，complete也会执行，下次next由于unsubscribe，
                          * 就没有next的回调了，就不会执行了 */
@@ -395,17 +398,16 @@ class Observable {
         });
     }
 
-    takeLast(n) {
+    takeLast(n = 0) {
         const input = this;
         return Observable.create(function (observer) {
             const lasts = [];
 
             return input.subscribe({
                 next(v) {
-                    if (lasts.length = n)
-                        lasts.shift();
-
                     lasts.push(v);
+                    if (lasts.length === n + 1)
+                        lasts.shift();
                 },
                 error: observer.error,
                 complete(arg) {
@@ -432,7 +434,7 @@ class Observable {
                 complete(arg) {
                     if (!completeRunned) {
                         completeRunned = true;
-                        observer.complete();
+                        observer.complete(arg);
                     }
                 }
             });
@@ -1236,10 +1238,14 @@ class Observable {
     }
 
     zip(project, ...observables) {
+        if (typeof project === 'object')  // project为observable时，要调整下传参顺序，不然输出结果时数组前两个值顺序会颠倒
+            return Observable.zip(this, project, ...observables);
         return Observable.zip(project, this, ...observables);
     }
 
     combineLatest(project, ...observables) {
+        if (typeof project === 'object') // 同上
+            return Observable.combineLatest(this, project, ...observables);
         return Observable.combineLatest(project, this, ...observables);
     }
 
@@ -1348,9 +1354,11 @@ Observable.create = function (fn) {
     return new Observable(fn);
 };
 
-Observable.empty = function (arg) {
+Observable.empty = function (val) {
     return Observable.create(function (observer) {
-        observer.complete(arg);
+        if (val !== undefined)
+            observer.next(val);
+        observer.complete();
     });
 };
 
@@ -1433,6 +1441,12 @@ Observable.timer = function (beginTime, time) {
 // 用数组存储所有发出的数，然后进行判断，不对所有数组的0位置及之后位置都储存数据时删除，但是发出数据数量不能过多，
 // 不然数组长度过长会造成性能问题，处理长度过长时，可以像下面那种写法，设定一个特定长度，超过时再新建数组存储
 Observable.sequenceEqual = function (...observables) {
+    const length = observables.length;
+    if (!length || length === 1) {  // observables没传或只传了一个时，认为是相等的
+        console.warn(`sequenceEqual: pass only ${length} observable, please pass at least two!`);
+        return Observable.empty(true);
+    }
+
     return Observable.create(function (observer) {
         const SIZE = 100;
         const length = observables.length;
@@ -1581,6 +1595,16 @@ Observable.sequenceEqualSameLength = function (...observables) {
 }
 
 Observable.merge = function (...observables) {
+    const length = observables.length;
+    if (!length) {  // merge没有observable传入时，返回空observable
+        console.warn('merge: you don\'t pass any observable, please pass at least two!');
+        return Observable.empty();
+    }
+    if (length === 1) {  // 只有一个observable传入时，不用比较，返回传入的值即可
+        console.warn('merge: you pass only one observable, please pass at least two!');
+        return observables[0];
+    }
+
     return Observable.create(function (observer) {
         const completes = new Array(observables.length);
         const subscriptions = [];
@@ -1605,8 +1629,14 @@ Observable.merge = function (...observables) {
 
 Observable.concat = function (...observables) {
     const length = observables.length;
-    if (!length)
+    if (!length) {  // 没有observable时，返回空observable
+        console.warn('concat: you don\'t pass any observable, please pass at least two!');
         return Observable.empty();
+    }
+    if (length === 1) {  // 只有一个observable传入时，返回传入值
+        console.warn('concat: you pass only one observable, please pass at least two!');
+        return observables[0];
+    }
 
     return Observable.create(function (observer) {
         let subscriptions = [];
@@ -1638,6 +1668,30 @@ Observable.concat = function (...observables) {
 };
 
 Observable.zip = function (project, ...observables) {
+    const type = typeof project;
+    const temp = project;
+    if (type !== 'function') {  // project不是函数时，重置为默认函数，并发出警告
+        console.warn(`zip: project should be a function, but the type now is ${type}!`);
+        project = (...args) => args;
+    }
+
+    if (type === 'object') // project为observable时，project就用默认函数
+        observables.unshift(temp);
+
+    const length = observables.length;
+    for (let i = 0; i < length; i++)  // observables中有非Observable类型的值时，返回空observable，并发出警告
+        if (!(observables[i] instanceof Observable)) {
+            console.warn('zip: all of observables must be instances of Observable!');
+            return Observable.empty();
+        }
+
+    
+    if (!length) {  // 没有传入值时，返回空observable
+        console.warn('zip: you don\'t pass any observable, please pass at least one!');
+        return Observable.empty();
+    }
+
+    // 只有一个值传入时，下面代码效果是一样的，就不用再多余重写一个 length === 1 的情况，而且本身一个observable的zip也说的通
     return Observable.create(function (observer) {
         const length = observables.length;
         const indexes = new Array(length);
@@ -1690,49 +1744,34 @@ Observable.zip = function (project, ...observables) {
     });
 };
 
-Observable.race = function (...observables) {
-    return Observable.create(function (observer) {
-        const length = observables.length;
-        const subscriptions = [];
-        let runAtLeastOnce = false;
-        let sync = false;  // 默认同步为false
+Observable.combineLatest = function (project, ...observables) {
+    const type = typeof project;
+    const temp = project;
+    if (type !== 'function') {  // project不是函数时，赋为默认值，并且发出警告
+        console.warn('zip: project should be a function, but the type now is ${type}!');
+        project = (...args) => args;
+    }
 
-        for (let i = 0; i < length; i++) {
-            subscriptions[i] = observables[i].subscribe({
-                next(v) {
-                    // next被同步调用时，下面的if (sync)会break循环，该observable必然为第一个，后面的都不需要订阅了
-                    // 若异步调用时，就不会再进下面的if判断，全部都会被订阅，然后第一个发出值的observable将其他observable取消订阅即可
-                    sync = true;
+    if (type === 'object')  // project为observable时，将其推入observables的最前面
+        observables.unshift(temp);
 
-                    if (!runAtLeastOnce) {
-                        for (let j = 0; j < observables.length; j++)
-                            if (j !== i)
-                                // 考虑到同步observable的情况，该同步observable之后的并未订阅，即subscription为undefined，
-                                // 所以要判断下subscription是否存在
-                                subscriptions[j] && subscriptions[j].unsubscribe();
-
-                        runAtLeastOnce = true;
-                    }
-
-                    observer.next(v);
-                },
-                error: observer.error,
-                complete: observer.complete
-            });
-
-            if (sync)
-                break;
+    const length = observables.length;
+    for (let i = 0; i < length; i++)  // observables有非Observalbe类型的值时，返回空observable，并发出警告
+        if (!(observables[i] instanceof Observable)) {
+            console.warn('zip: all of observables must be instances of Observable!');
+            return Observable.empty();
         }
 
-        return function () {
-            // 并不能在next中放个变量记录被订阅的observable的index，假设全是异步observable，若有一个next调用之后，当然是可以的，
-            // 但是如果想在所有next都没发出之前取消订阅，则必须全部取消，所以考虑所有情况全部取消一遍即可
-            subscriptions.forEach(subscription => subscription && subscription.unsubscribe());
-        };
-    });
-};
+    
+    if (!length) {  // 没有传入参数时，返回空observable，并发出警告
+        console.warn('zip: you don\'t pass any observable, please pass at least two!');
+        return Observable.empty();
+    }
+    if (length === 1) {  // 只有一个observable传入时，返回传入的值，并发出警告，因只有一个observable调用该函数没意义
+        console.warn('concat: you pass only one observable, please pass at least two!');
+        return Observables[0];
+    }
 
-Observable.combineLatest = function (project, ...observables) {
     return Observable.create(function (observer) {
         const length = observables.length;
         const latestVals = new Array(length);
@@ -1777,6 +1816,56 @@ Observable.combineLatest = function (project, ...observables) {
 
         return function () {
             subscriptions.forEach(subscription => subscription.unsubscribe());
+        };
+    });
+};
+
+Observable.race = function (...observables) {
+    const length = observables.length;
+    if (!length) {  // 没有observable传入时，返回空observable，并发出警告
+        console.warn('race: you don\'t pass any observable, please pass at least one!');
+        return Observable.empty();
+    }
+    if (length === 1)  // 只有一个observable传入时，返回传入的值
+        return observables[0];
+
+    return Observable.create(function (observer) {
+        const length = observables.length;
+        const subscriptions = [];
+        let runAtLeastOnce = false;
+        let sync = false;  // 默认同步为false
+
+        for (let i = 0; i < length; i++) {
+            subscriptions[i] = observables[i].subscribe({
+                next(v) {
+                    // next被同步调用时，下面的if (sync)会break循环，该observable必然为第一个，后面的都不需要订阅了
+                    // 若异步调用时，就不会再进下面的if判断，全部都会被订阅，然后第一个发出值的observable将其他observable取消订阅即可
+                    sync = true;
+
+                    if (!runAtLeastOnce) {
+                        for (let j = 0; j < observables.length; j++)
+                            if (j !== i)
+                                // 考虑到同步observable的情况，该同步observable之后的并未订阅，即subscription为undefined，
+                                // 所以要判断下subscription是否存在
+                                subscriptions[j] && subscriptions[j].unsubscribe();
+
+                        runAtLeastOnce = true;
+                    }
+
+                    observer.next(v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+
+            if (sync)
+                break;
+        }
+
+        return function () {
+            // 并不能在next中放个变量记录被订阅的observable的index，假设全是异步observable，若有一个next调用之后，当然是可以的，
+            // 但是如果想在所有next都没发出之前取消订阅，则必须全部取消，所以考虑所有情况全部取消一遍即可
+            subscriptions.forEach(subscription => subscription && subscription.unsubscribe());
         };
     });
 };
