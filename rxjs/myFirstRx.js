@@ -1254,6 +1254,94 @@ class Observable {
             return input.subscribe(observer);
         });
     }
+
+    delay(time) {
+        const input = this;
+        if (!time)
+            return this;
+
+        return Observable.create(function (observer) {
+            const ids = [];
+            const subscription = input.subscribe({
+                next(v) {
+                    // 同步observable用setTimeout顺序也是对的，可能用setTimeout同时执行时按次序先后加入，是准的，
+                    // setTimeout稳定性比setInterval好些
+                    const id = setTimeout(() => {
+                        observer.next(v);
+                        ids.shift();  //  因为都是延迟一样的时间，所以和队列一样，先进的先完成，完成时只需要将最前面的删除即可
+                    }, time);
+
+                    ids.push(id);
+                },
+                error: observer.error,
+                complete(arg) {  // complete也延迟time时间
+                    const id = setTimeout(() => {
+                        observer.complete(arg);
+                        ids.shift();  // 同上
+                    }, time);
+
+                    ids.push(id);
+                }
+            });
+
+            return function () {
+                subscription.unsubscribe();
+                ids.forEach(id => clearTimeout(id));  // 可能中途取消订阅，所以设置的定时器也要清除
+            };
+        });
+    }
+
+    delayWhen(delayDurationSelector) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let count = 0;
+            const subscriptions = [];
+            const completes = [];
+            let inputCompleted = false;
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    let first = true;
+                    const index = count++;
+                    const observable = delayDurationSelector(v, index);  // 传入input发射的值及当前值的序号
+                    completes[index] = false;
+                    const subscription = observable.subscribe({
+                        next(subVal) {
+                            if (first) {  // 设置first是为了判定是否第一次调用，第一次才执行下面代码，为了防止同步observable重复调用下面代码
+                                first = false;
+                                subscription && subscription.unsubscribe();  // 当前observable发射第一个数据时，取消当前observable的订阅
+                                completes[index] = true;  // 第一次发射值，该observable就完成了
+
+                                observer.next(v);
+                                /* 1.input没完成之前observer.complete必定不会调用
+                                 * 2.input完成后，由于不会再有新值发射，所以在每个delay的observable发射第一个值时判断当前存在的observable
+                                 * 是否都完成了
+                                 *   1) 没有全部完成，则还有observable在运行
+                                 *   2) 已全部完成，则当前observable为最后一个，调用observer.complete */
+                                if (inputCompleted && completes.every(completed => completed))
+                                    observer.complete();
+                            }
+                        }
+                    });
+                    subscriptions.push(subscription);
+                },
+                eror: observer.error,
+                complete(arg) {
+                    inputCompleted = true;
+                    /* observer.complete何时调用存在两种情况，在input的complete调用时，判断已经发射的值经过delay后是否都完成了
+                     * 因为input.complete后，不会再有值发射，所以input.complete时，只要判定已经存在的值
+                     * 1. 若都完成了，则在observer.complete中调用
+                     * 2. 若还有未完成的，则在input.complete之后的那些observable中最后一个发射值的那个observable.next时调用 */
+                    if (completes.every(completed => completed))
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe());
+            };
+        });
+    }
 }
 
 Observable.create = function (fn) {
