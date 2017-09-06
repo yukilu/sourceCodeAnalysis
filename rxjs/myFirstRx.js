@@ -207,6 +207,35 @@ class Observable {
         });
     }
 
+    first() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let firstExist = false;
+            let subscription;
+            subscription = input.subscribe({
+                next(v) {
+                    if (firstExist)  // 同步observable无法unsubscribe，所以只能在这里判断，从第二次开始就没必要执行下面的代码了，直接return
+                        return;
+
+                    firstExist = true;
+                    subscription && subscription.unsubscribe();
+
+                    observer.next(v);
+                    observer.complete();
+                },
+                error: observer.error,
+                complete(arg) {
+                    if (!firstExist)
+                        observer.complete(arg);
+                }
+            });
+
+            return function() {
+                subscription.unsubscribe();
+            };
+        });
+    }
+
     last() {
         const input = this;
         return Observable.create(function (observer) {
@@ -349,8 +378,11 @@ class Observable {
                     count++;
                     observer.next(v);
                     if (count === num) {
-                        observer.complete();
+                        /* 将subscription放在前面，再调用complete，是为了防止complete出错时，中止函数，造成unsubscribe无法调用
+                         * unsubscribe调用后，由于当前next下代码已经执行，都会执行完，complete也会执行，下次next由于unsubscribe，
+                         * 就没有next的回调了，就不会执行了 */
                         subscription && subscription.unsubscribe();
+                        observer.complete(); 
                     }
                 },
                 error: observer.error,
@@ -437,7 +469,7 @@ class Observable {
         });
     }
 
-    count(countFn) {
+    count(countFn = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             let count = 0;
@@ -527,10 +559,25 @@ class Observable {
              * -> subscribe(observer) { return this.main(observer) }
              * 所以fn被赋给main，在subscribe中，this.main调用，即create(fn)，fn中的this指向create创建的那个对象 */ 
             const that = this;  
+            let count = 0;
             return input.subscribe({
                 next(v) {
-                    const mapRtn = mapFn(v); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
+                    const mapRtn = mapFn(v, count++); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
                     observer.next(mapRtn);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    mapTo(val) {
+        // return this.map(() => val);
+        const input = this;
+        return Observable.create(function (observer) {
+            return input.subscribe({
+                next(v) {
+                    observer.next(val);
                 },
                 error: observer.error,
                 complete: observer.complete
@@ -602,6 +649,178 @@ class Observable {
                 subscriptions.forEach(subscription => subscription.unsubscribe);
             };
         });
+    }
+
+    mergeMap(mapFn) {
+        return this.map(mapFn).mergeAll();
+    }
+
+    mergeMapTo(observable) {
+        return this.mapTo(observable).mergeAll();
+    }
+
+    concat(...observables) {
+        return Observable.concat(this, ...observables);
+    }
+
+    concatAll() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let inputCompleted = false;
+            let subscription;
+            let canRun = true;
+            const observablesBuffer = [];
+
+            const subObserver = {
+                next: observer.next,
+                error: observer.error,
+                complete(arg) {
+                    const observableStored = observablesBuffer.shift();
+
+                    /* 具体情况分为三种
+                     * 1. observablesBuffer中还有缓存值，直接订阅该缓存值
+                     * 2. observablesBuffer为空，即没有缓存值，继续判断input是否完成
+                     *   1) input已经完成了，则当前observable为最后一个，complete时，直接执行observer.complete
+                     *   2) input未完成，则前面缓存的所有observable都以完成，等待input下一个值发射或直接complete
+                     */
+                    if (observableStored) {  // observable缓存数组中有值，直接订阅下一个缓存值
+                        subscription && subscription.unsubscribe();  // 将之前的subscription进行unsubscribe，防止出现问题
+                        subscription = observableStored.subscribe(subObserver);
+                    }
+                    // observable缓存数组中没有值，且input已经完成，因为当前observable在input完成后才完成，input完成后就不会再往
+                    // 缓存数组中缓存值，所以当在input完成后，且observable缓存数组为空时，当前observable即为最后一个
+                    else if (inputCompleted)
+                        observer.complete(arg);
+                    // observable缓存数组中没有值，input未完成，说明之前发射的observable都完成了，但是还没到下一个observable发射
+                    // 或input的complete，就把下一次发射时是判断否能直接订阅的canRun赋为true
+                    else
+                        canRun = true;
+                }
+            };
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (!(v instanceof Observable))
+                        return;
+
+                    const observable = v;
+
+                    // 判断canRun，若为true，则前面的observable都运行结束了，可以直接订阅，为false，则前面的observable还没结束，缓存起来
+                    if (canRun) {
+                        canRun = false;
+                        subscription && subscription.unsubscribe();
+                        subscription = observable.subscribe(subObserver);
+                    } else
+                        observablesBuffer.push(observable);
+                },
+                complete(arg) {
+                    inputCompleted = true;
+                    if (canRun)  // canRun为true，说明前面发射的observable都完成了，可以直接complete，否则就忽略
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                subscription && subscription.unsubscribe();
+                subscriptionInput.unsubscribe();
+            };
+        });
+    }
+
+    concatMap(mapFn) {
+        return this.map(mapFn).concatAll();
+    }
+
+    concatMapTo(observable) {
+        return this.mapTo(observable).concatAll();
+    }
+
+    switch() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let inputCompleted = false;  // 判断一阶observable是否完成
+            let completed = true;  // 由于任意时刻至多只有一个二阶observable在运行，所以用一个completed来判断当前observable是否完成就够
+            let subscription;
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (!(v instanceof Observable))
+                        return;
+
+                    const observable = v;
+                    // 新发出一个observable时，就将completed重置为false，
+                    // 并且直接将前一个observable进行unsubscribe，不论其存在与否，完成与否
+                    completed = false;
+                    subscription && subscription.unsubscribe();
+                    subscription = observable.subscribe({
+                        next: observer.next,
+                        error: observer.error,
+                        /* 因为同一时间只可能存在至多一个observable运行，所以当其完成后，判断input是否完成，若已经完成，由于input
+                         * 完成后不会再发出值，所以当前observable为最后一个，调用observer.complete，若未完成，则忽略，因为后面input
+                         * 可能还会再发射observable，或者直接complete */
+                        complete(arg) {
+                            completed = true;
+                            if (inputCompleted)
+                                observer.complete(arg);
+                        }
+                    });
+                },
+                error: observer.error,
+                // input完成时，判断是否还有observable在运行，若有，则忽略input的complete，当当前observable完成时调用observer.complete
+                // 若没有，由于input完成后不再有observable被发射，所以直接调用observer.complete
+                complete(arg) {
+                    inputCompleted = true;
+                    if (completed)
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscription && subscription.unsubscribe();
+            };
+        });
+    }
+
+    switchMap(mapFn) {
+        return this.map(mapFn).switch();
+    }
+
+    switchMapTo(observable) {
+        return this.mapTo(observable).switch();
+    }
+
+    pairwise() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let first = true;
+            let last;
+            return input.subscribe({
+                next(v) {
+                    if (first) {
+                        first = false;
+                        last = v;
+                        return;
+                    }
+
+                    const pair = [last, v];
+                    observer.next(pair);
+                    last = v;
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    pluck(...attributes) {
+        return this.map(v => attributes.reduce((obj, attribute) => obj[attribute], v));
+    }
+
+    repeat(n = 1) {
+        const observables = new Array(n);
+        observables.fill(this);
+        return Observable.concat(...observables);
     }
 
     debounce(debounceFn) {
@@ -1024,10 +1243,6 @@ class Observable {
         return Observable.combineLatest(project, this, ...observables);
     }
 
-    concat(...observables) {
-        return Observable.concat(this, ...observables);
-    }
-
     race(...observables) {
         return Observable.race(this, ...observables);
     }
@@ -1043,6 +1258,12 @@ class Observable {
 
 Observable.create = function (fn) {
     return new Observable(fn);
+};
+
+Observable.empty = function (arg) {
+    return Observable.create(function (observer) {
+        observer.complete(arg);
+    });
 };
 
 Observable.from = function (array) {
@@ -1295,6 +1516,10 @@ Observable.merge = function (...observables) {
 };
 
 Observable.concat = function (...observables) {
+    const length = observables.length;
+    if (!length)
+        return Observable.empty();
+
     return Observable.create(function (observer) {
         let subscriptions = [];
         let length = observables.length;
