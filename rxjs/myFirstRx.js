@@ -71,7 +71,11 @@ class Observable {
         return new Multicasted(this, subject);
     }
 
-    defaultIfEmpty(val = true) {
+    empty(val) {
+        return Observable.empty(val);
+    }
+
+    defaultIfEmpty(val) {
         const input = this;
         return Observable.create(function (observer) {
             let isEmpty = true;
@@ -84,7 +88,7 @@ class Observable {
                 },
                 error: observer.error,
                 complete(arg) {
-                    if (isEmpty)
+                    if (isEmpty && val !== undefined)
                         observer.next(val);
 
                     observer.complete(arg);
@@ -93,7 +97,34 @@ class Observable {
         });
     }
 
-    observeOn(scheduler) {
+    isEmpty() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let empty = true;
+            return input.subscribe({
+                next(v) {
+                    if (empty)  // 赋一次就够了，防止重复赋值
+                        empty = false;
+                },
+                complete(arg) {
+                    observer.next(empty);
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    ignoreElements() {
+        const input = this;
+        return Observable.create(function (observer) {
+            return input.subscribe({
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    observeOn(scheduler = 'async') {
         const input = this;
 
         if (scheduler === 'async')
@@ -128,12 +159,17 @@ class Observable {
     multiplyByTen() {
         const input = this;
         return Observable.create(function (observer) {
-            const subscription = input.subscribe({ next: v => observer.next(10 * v) });
-            return subscription;
+            return input.subscribe({
+                next(v) {
+                    observer.next(10 * v);
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
         });
     }
 
-    filter(filterFn) {
+    filter(filterFn = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             return input.subscribe({  // 直接将subscription返回，与上面不同，简洁但略难以理解
@@ -147,7 +183,7 @@ class Observable {
         });
     }
 
-    every(everyFn) {
+    every(everyFn = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             let result = true;
@@ -170,14 +206,15 @@ class Observable {
         return Observable.sequenceEqual(this, ...observables);
     }
 
-    find(findFn) {
+    find(findFn = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             let first = true;
 
             return input.subscribe({
                 next(v) {
-                    if (findFn(v) && first) {
+                    // 只需要找到第一个符合findFn的值，并且将first放前面，找到第一个之后，后续的就不需要调用函数判断了
+                    if (first && findFn(v)) {
                         first = false;
                         observer.next(v);
                         observer.complete();
@@ -187,7 +224,7 @@ class Observable {
         });
     }
 
-    findIndex(findFn) {
+    findIndex(findFn = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             let first = true;
@@ -195,7 +232,7 @@ class Observable {
 
             return input.subscribe({
                 next(v) {
-                    if (findFn(v) && first) {
+                    if (first && findFn(v)) {
                         first = false;
                         observer.next(index);
                         observer.complete();
@@ -300,7 +337,7 @@ class Observable {
         });
     }
 
-    skipWhile(skipFilter) {
+    skipWhile(skipFilter = v => false) {
         const input = this;
         return Observable.create(function (observer) {
             return input.subscribe({
@@ -457,7 +494,7 @@ class Observable {
         });
     }
 
-    takeWhile(takeFilter) {
+    takeWhile(takeFilter = v => true) {
         const input = this;
         return Observable.create(function (observer) {
             return input.subscribe({
@@ -554,7 +591,7 @@ class Observable {
         });
     }
 
-    map(mapFn) {
+    map(mapFn = v => v) {
         const input = this;
         return Observable.create(function (observer) {
             /* Observable.create(fn) -> new Observable(fn) -> constructor(fn) { this.main = fn }
@@ -899,7 +936,7 @@ class Observable {
     /* a值发出time时间段内无值发出，则time时间段后发出当前值，若a值发出time时间段内发出b值，则抛弃a值，看b值发出time时间段内是否
      * 有值发出，无值则发出b值，若有c值发出，抛弃b值，判断c值发出time时间段内是否有值发出，无则发出c值，有则抛弃c值，继续判断后续值
      * 即a值发出time时间段内判断是否有b值发出，无则发出a值，有就继续判断后续值...，直到出现某值x在time时间段内无值发出，发出值x */
-    debounceTime(time) {  // debounce 去抖动，即用新值刷新旧值
+    debounceTime(time = 1000) {  // debounce 去抖动，即用新值刷新旧值
         /* return this.debounce(v => Observable.timer(time));
          * 不用上面代码写的原因还是定时器不稳定的因素，特别是一阶observable的complete和二阶observable的发射数据在同一时间节点上时，
          * 谁先谁后是不一定的，所以同一个代码运行几次的结果可能都不同，而直接在input事件流中判断时间不会发生上述问题，运行几次输出
@@ -932,7 +969,7 @@ class Observable {
      * throttleTime是前值发出后time时间段内的后值全部忽略，超过time时间段后的第一个值再发出，其后time时间段的值忽略... */
 
     // a值发出后time时间段内的值都省略，超过这段时间后再发出第二个值b，b值发出后time时间段内的值省略，超过这个时间段发出第三个值c...
-    throttleTime(time) {  // 节流 即一段时间内只发出第一个值
+    throttleTime(time = 1000) {  // 节流 即一段时间内只发出第一个值
         // 不这么写的理由同debounceTime
         // return this.throttle(v => Observable.timer(time));
         
@@ -1011,7 +1048,7 @@ class Observable {
      * 这时候由于定时器可能是通过多线程跑的，加入js主线程的消息队列时，先后顺序并不确定，所以会出现相同代码取样不同的情况
      * 因此最好将time的值适当加个1，如用1001代替1000，2501替代2500，当然这么做取样数很大时就会由误差
      * 同时要指出的是，由于定时器本身并不稳定，定时器加入的回调函数何时运行取决于js主线程的具体情况，所以sample函数也是不稳定的 */
-    sampleTime(time) {
+    sampleTime(time = 1000) {
         const interval = Observable.interval(time);
         return this.sample(interval);
     }
@@ -1092,7 +1129,7 @@ class Observable {
         });
     }
 
-    bufferTime(time) {
+    bufferTime(time = 1000) {
         // return Observable.buffer(Observable.interval(time));
         
         // 这里还是存在定时器不稳定的问题，而且官方版的rxjs也存在这个问题
@@ -1261,7 +1298,7 @@ class Observable {
         });
     }
 
-    delay(time) {
+    delay(time = 1000) {
         const input = this;
         if (!time)
             return this;
@@ -1351,6 +1388,12 @@ class Observable {
 }
 
 Observable.create = function (fn) {
+    const type = typeof fn;
+    if (type !== 'function') {  // fn不是函数时，返回空observable，并发出警告
+        console.warn(`create: you must pass a funtion, but the type of what you have passed is ${type}!`);
+        return Observable.empty();
+    }
+
     return new Observable(fn);
 };
 
@@ -1388,10 +1431,26 @@ Observable.interval = function (time) {
     return Observable.intervalStartFrom(0, time);
 };
 
-Observable.intervalStartFrom = function(startNum, time) {
+Observable.intervalStartFrom = function (startNum, time) {
     return Observable.create(observer => {
         let n = startNum;
         const id = setInterval(() => observer.next(n++), time);
+
+        return function () {
+            clearInterval(id);
+        };
+    });
+};
+
+Observable.intervalNow = function (time) {
+    return Observable.intervalStartNowFrom(0, time);
+};
+
+Observable.intervalStartNowFrom = function (startNum, time) {
+    return Observable.create(observer => {
+        let n = startNum;
+        observer.next(n);
+        const id = setInterval(() => observer.next(++n), time);
 
         return function () {
             clearInterval(id);
@@ -1403,6 +1462,12 @@ Observable.intervalFrom = function (array, time) {
     return Observable.create(function (observer) {
         let i = 0;
         const length = array.length;
+
+        if (!length) {  // length === 0，直接complete
+            observer.complete();
+            return;
+        }
+
         const id = setInterval(() => {
             observer.next(array[i++]);
 
@@ -1413,7 +1478,39 @@ Observable.intervalFrom = function (array, time) {
         }, time);
 
         return function () {
-            clearInterval(id);
+            if (typeof id !== 'undefined')
+                clearInterval(id);
+        };
+    });
+};
+
+Observable.intervalNowFrom = function (array, time) {
+    return Observable.create(function (observer) {
+        let i = 0;
+        const length = array.length;
+        if (!length) {  // length === 0，直接complete
+            observer.complete();
+            return;
+        }
+
+        observer.next(array[0]);
+        if (length === 1) {  // 只有一个数时，不需要定时器，next之后直接complete
+            observer.complete();
+            return;
+        }
+
+        const id = setInterval(() => {
+            observer.next(array[++i]);
+
+            if (i === length - 1) {
+                clearInterval(id);
+                observer.complete();
+            }
+        }, time);
+
+        return function () {
+            if (typeof id !== 'undefined')
+                clearInterval(id);
         };
     });
 };
@@ -1748,7 +1845,7 @@ Observable.combineLatest = function (project, ...observables) {
     const type = typeof project;
     const temp = project;
     if (type !== 'function') {  // project不是函数时，赋为默认值，并且发出警告
-        console.warn('zip: project should be a function, but the type now is ${type}!');
+        console.warn('combineLatest: project should be a function, but the type now is ${type}!');
         project = (...args) => args;
     }
 
@@ -1758,17 +1855,17 @@ Observable.combineLatest = function (project, ...observables) {
     const length = observables.length;
     for (let i = 0; i < length; i++)  // observables有非Observalbe类型的值时，返回空observable，并发出警告
         if (!(observables[i] instanceof Observable)) {
-            console.warn('zip: all of observables must be instances of Observable!');
+            console.warn('combineLatest: all of observables must be instances of Observable!');
             return Observable.empty();
         }
 
     
     if (!length) {  // 没有传入参数时，返回空observable，并发出警告
-        console.warn('zip: you don\'t pass any observable, please pass at least two!');
+        console.warn('combineLatest: you don\'t pass any observable, please pass at least two!');
         return Observable.empty();
     }
     if (length === 1) {  // 只有一个observable传入时，返回传入的值，并发出警告，因只有一个observable调用该函数没意义
-        console.warn('concat: you pass only one observable, please pass at least two!');
+        console.warn('combineLatest: you pass only one observable, please pass at least two!');
         return Observables[0];
     }
 
