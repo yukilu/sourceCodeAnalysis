@@ -865,6 +865,15 @@ class Observable {
         });
     }
 
+    partition(filterFn = v => true) {
+        const input = this;
+        const observables = [];
+        observables[0] = this.filter(filterFn);
+        observables[1] = this.skipWhile(filterFn);
+
+        return observables;
+    }
+
     pluck(...attributes) {
         return this.map(v => attributes.reduce((obj, attribute) => obj[attribute], v));
     }
@@ -879,7 +888,7 @@ class Observable {
         const input = this;
         return Observable.create(function (observer) {
             let index = -1;
-            const subscription;
+            let subscription;
             // 用来标记当前是否还有observable在运行，即next时候，值是否可以发射，
             // 或者用completed标记也可以，发射值时查看前面的observable是否已完成，效果是等同的
             let canLaunch = true;
@@ -936,7 +945,7 @@ class Observable {
         const input = this;  
         return Observable.create(function (observer) {
             let index = -1;
-            const subscription;
+            let subscription;
             let canLaunch = true;
             const subscriptionInput = input.subscribe({
                 next(v) {
@@ -950,13 +959,11 @@ class Observable {
 
                     subscription && subscription.unsubscribe();
                     const observable = durationSelector(v, index);
-                    const subscription = observable.subscribe({
+                    subscription = observable.subscribe({
                         complete() {
                             canLaunch = true;
                         }
                     });
-
-                    subscriptions.push(subscription);
                 },
                 error: observer.error,
                 complete: observer.complete
@@ -1056,6 +1063,20 @@ class Observable {
             };
         });
     }
+
+    /* audit，throttle，debounce，sample区别
+     * 1. audit和throttle
+     * audit和throttle都是属于节流类型的，即在从发出一个二阶observable到其complete这个时间段的距离内，只会发出一个值，
+     * 区别在于，audit在这个阶段内，是在complete时发出最新值，而throttle在这个阶段内，是在开始时发出开始值
+     * 2. debounce
+     * debouce是比较前后两个发射值的距离，若小于指定值(即前一个值发出的二阶observable还没完成，就发出后一个值)，就取消
+     * 前一个的发射的二阶observable，并忽略前一个值，用后一个值来取代，如此不停比较前后两个发射值的距离，直到某一个值与
+     * 后一个值距离大于指定值时(即前一个值发出的二阶observable完成时，下一个值还没发射)，在其发出的二阶observable执行
+     * complete时，将其值发出
+     * 3. sample
+     * sample不同于上述三个函数，sample有一根取样时间线(observable)与input并列执行，在取样时间线发射值时，就把从input流
+     * 缓存的最新值发射出去
+     */
 
     auditTime(time = 1000) {
         // return this.audit(v => Observable.timer(time));
@@ -1417,8 +1438,28 @@ class Observable {
         return Observable.combineLatest(project, this, ...observables);
     }
 
+    // 缓存input发出的所有二阶observable，然后在input完成时，将所有缓存的二阶observables通过同时发出并通过combineLatest打平
     combineAll() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subscriptions;
+            const observables = [];
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    const observable = v;
+                    observables.push(observable);
+                },
+                error: observer.error,
+                complete(arg) {
+                    subscriptions = Observable.combineLatest((...args) => args, ...observables).subscribe(observer);
+                }
+            });
 
+            return function () {
+                subscriptions.unsubscribe();
+                subscriptionInput.unsubscribe();
+            };
+        });
     }
 
     race(...observables) {
@@ -1520,6 +1561,59 @@ class Observable {
             };
         });
     }
+
+    // 与combineLatest不同，combineLatest任意一根时间线发射数据都会结合其他时间线的最新数据来执行observe.next，而withLastestFrom
+    // 只是以input为主轴，只有当主时间线发射数据时，才会结合当前其他时间线的最新数据来执行observer.next
+    withLatestFrom(project, ...observables) {
+        const input = this;
+        const type = typeof project;
+        const temp = project;
+        if (type !== 'function') {
+            console.warn(`withLatestFrom: project must be a function ,but now is ${type}`);
+            project = (...args) => args;
+        }
+
+        if (type === 'object')
+            observables.unshift(temp);
+            
+        return Observable.create(function (observer) {
+            let length = observables.length;
+            let latests = new Array(length);
+            latests.fill(undefined);
+            let allHasRunAtLeastOnce = false;
+            const subscriptions = [];
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    if (allHasRunAtLeastOnce) {
+                        observer.next(project(v, ...latests));
+                        return;
+                    }
+
+                    if (latests.every(latest => latest !== undefined)) {  // 第一次latests都有值时，进这里
+                        allHasRunAtLeastOnce = true;
+                        // allHasRunAtLeastOnce赋为true时，也是第一次latest都有值，要运行第一次next，第二次开始就进上面那个if
+                        // 这里写这么麻烦是为了避免每次都要遍历数组，符合条件之后直接用一个变量标记，取代一直遍历数组
+                        observer.next(project(v, ...latests));
+                    }
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+
+            observables.forEach((observable, index) => {
+                subscriptions[index] = observable.subscribe({
+                    next(v) {
+                        latests[index] = v;
+                    }
+                });
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscriptions.forEach(subscription => subscription.unsubscribe());
+            };
+        });
+    }
 }
 
 Observable.create = function (fn) {
@@ -1576,6 +1670,26 @@ Observable.fromEvent = function (node, type) {
 
 Observable.interval = function (time) {
     return Observable.intervalStartFrom(0, time);
+};
+
+Observable.intervalRandom = function (start, end) {
+    return Observable.create(function (observer) {
+        let index = 0;
+        let id;
+        const duration = end - start;
+
+        function random() {
+            observer.next(index++);
+            // 定时器回调自身，形成无限回调，效果同interval，只要定时器被清除一次，就断了
+            id = setTimeout(random, start + duration * Math.random());
+        }
+
+        id = setTimeout(random, start + duration * Math.random());  // 启动setTimeout回调函数
+
+        return function () {
+            clearTimeout(id);
+        };
+    });
 };
 
 Observable.intervalStartFrom = function (startNum, time) {
