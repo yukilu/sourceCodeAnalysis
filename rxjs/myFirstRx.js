@@ -37,17 +37,32 @@ class Observer {
 class Observable {
     constructor(fn) {
         this.main = fn;
+        this.defer = null;
     }
 
     subscribe(nextOrObserver, error, complete) {
+        const defer = this.defer;
         let observer = null;
+        let subscription = null;
 
+        // 处理传入参数，保证observer的正确
         if (typeof observerOrNext === 'function')
             observer = new Observer(nextOrObserver, error, complete);
         else if (!nextOrObserver.isSubject)
             observer = new Observer(nextOrObserver);
 
-        let subscription = null;
+        if (defer) {  // defer存在，就直接用deferFn的返回值来订阅observer，并将subscription返回
+            let observable = defer();
+
+            if (!(observable instanceof Observable)) {  // 若deferFn返回值不是Obervable实例，就重置为空observable
+                console.warn('defer: return value of deferFn is not an instance of Observable!');
+                observable = Observable.empty();
+            }
+
+            subscription = observable.subscribe(observer);
+            return subscription;
+        }
+        
         let isCleared = false;
         const unsubscribeFn = this.main(observer);
 
@@ -140,6 +155,8 @@ class Observable {
 
                 return subscription;
             });
+
+        return Observable.empty();
     }
 
     scan(pureFn, inital) {
@@ -794,9 +811,6 @@ class Observable {
                     subscription = observable.subscribe({
                         next: observer.next,
                         error: observer.error,
-                        /* 因为同一时间只可能存在至多一个observable运行，所以当其完成后，判断input是否完成，若已经完成，由于input
-                         * 完成后不会再发出值，所以当前observable为最后一个，调用observer.complete，若未完成，则忽略，因为后面input
-                         * 可能还会再发射observable，或者直接complete */
                         complete(arg) {
                             completed = true;
                             if (inputCompleted)
@@ -805,8 +819,7 @@ class Observable {
                     });
                 },
                 error: observer.error,
-                // input完成时，判断是否还有observable在运行，若有，则忽略input的complete，当当前observable完成时调用observer.complete
-                // 若没有，由于input完成后不再有observable被发射，所以直接调用observer.complete
+                // observer.complete何时运行见audit中分析
                 complete(arg) {
                     inputCompleted = true;
                     if (completed)
@@ -862,58 +875,81 @@ class Observable {
         return Observable.concat(...observables);
     }
 
-    debounce(debounceFn) {
+    audit(durationSelector) {
         const input = this;
-        const subscriptions = [];
-        let completed = true;
-        let lastSubscription;
-
         return Observable.create(function (observer) {
+            let index = -1;
+            const subscription;
+            // 用来标记当前是否还有observable在运行，即next时候，值是否可以发射，
+            // 或者用completed标记也可以，发射值时查看前面的observable是否已完成，效果是等同的
+            let canLaunch = true;
+            let latest;
+            let inputCompleted = false;
             const subscriptionInput = input.subscribe({
                 next(v) {
-                    /* 判断前一个值发出的observable的complete状态
-                     * 若为未完成状态，则当前值在前一个observable.complete前发射，需要取消前一个observable，则其complete不执行，
-                     * observer.next也不执行
-                     * 若为完成态，则当前值在前一个observable.complete后发射，前一个complete已经执行，引起observer.next的执行 */
-                    if (!completed)
-                        lastSubscription.unsubscribe();
+                    index++;
+                    latest = v;
 
-                    // 不论前一个值发出的observable完成与否，都需要新发出一个observable，并订阅，且重置当前observable的状态为未完成
-                    const observable = debounceFn(v);
-                    completed = false;
-                    lastSubscription = observable.subscribe({
-                        complete() {
-                            completed = true;
-                            observer.next(v);
+                    if (!canLaunch)
+                        return;
+
+                    canLaunch = false;
+                    subscription && subscription.unsubscribe();
+                    const observable = durationSelector(v, index);
+                    subscription = observable.subscribe({
+                        complete(arg) {
+                            canLaunch = true;
+                            observer.next(latest);
+
+                            if (inputCompleted)
+                                observer.complete(arg);
                         }
                     });
                 },
                 error: observer.error,
-                complete: observer.complete
+                complete(arg) {
+                    /* 延时发射值的observable或者发射二阶observable时都存在一个问题，即当input(一阶observable)完成时，是否调用observer.complete
+                     * 这个问题只需要在input完成时，对当前是否还存在运行的observable做判断
+                     * 1. 若当前没有运行的observable了，由于input完成后不会再有值被发射，所以之前发射的observable都已完成
+                     * 直接调用observer.complete
+                     * 2. 若当前还有observable在运行，则在input.complete时不调用observer.complete，而在运行的observable中的最后
+                     * 一个完成时调用observer.complete，而这种情况下，只需要在运行的observable的complete中判断
+                     *   1) input未完成，则必然不调用observer.complete，因后面可能还会发射值，或者后面紧接着input完成，在input.complete
+                     *   中调用observer.complete
+                     *   2) input已完成，则只需要判断当前observable是否是最后一个完成的，若有多个，则用completes数组来独立标记每个完成
+                     *   情况，都为true时，当前即为最后一个，若同一时间最多只有一个observable运行时，当前observable完成时即调用observer.complete
+                     */
+                    inputCompleted = true;
+                    if (canLaunch)
+                        observer.complete(arg);
+                }
             });
 
             return function () {
                 subscriptionInput.unsubscribe();
-                subscriptions.forEach(subscription => subscription.unsubscribe());
+                subscription && subscription.unsubscribe();
             };
         });
     }
 
-    throttle(throttleFn) {
-        const input = this;
-        const subscriptions = [];
-        let canLaunch = true;
-
+    throttle(durationSelector) {
+        const input = this;  
         return Observable.create(function (observer) {
+            let index = -1;
+            const subscription;
+            let canLaunch = true;
             const subscriptionInput = input.subscribe({
                 next(v) {
+                    index++;
+
                     if (!canLaunch)
                         return;
 
                     canLaunch = false;
                     observer.next(v);
 
-                    const observable = throttleFn(v);
+                    subscription && subscription.unsubscribe();
+                    const observable = durationSelector(v, index);
                     const subscription = observable.subscribe({
                         complete() {
                             canLaunch = true;
@@ -928,73 +964,50 @@ class Observable {
 
             return function () {
                 subscriptionInput.unsubscribe();
-                subscriptions.forEach(subscription => subscription.unsubscribe());
+                subscription && subscription.unsubscribe();
             };
         });
     }
 
-    /* a值发出time时间段内无值发出，则time时间段后发出当前值，若a值发出time时间段内发出b值，则抛弃a值，看b值发出time时间段内是否
-     * 有值发出，无值则发出b值，若有c值发出，抛弃b值，判断c值发出time时间段内是否有值发出，无则发出c值，有则抛弃c值，继续判断后续值
-     * 即a值发出time时间段内判断是否有b值发出，无则发出a值，有就继续判断后续值...，直到出现某值x在time时间段内无值发出，发出值x */
-    debounceTime(time = 1000) {  // debounce 去抖动，即用新值刷新旧值
-        /* return this.debounce(v => Observable.timer(time));
-         * 不用上面代码写的原因还是定时器不稳定的因素，特别是一阶observable的complete和二阶observable的发射数据在同一时间节点上时，
-         * 谁先谁后是不一定的，所以同一个代码运行几次的结果可能都不同，而直接在input事件流中判断时间不会发生上述问题，运行几次输出
-         * 的结果基本都是相同的，throttleTime同理 */
-
+    debounce(durationSelector) {
         const input = this;
         return Observable.create(function (observer) {
-            let lastTime = 0;
-            let currentTime = 0;
-            let timeoutId = -1;
-            return input.subscribe({
+            let subscription;
+            // 用来标记当前是否还有未完成的observable，因为同一时间内只最多只可能有一个observable运行，所以用一个变量即可
+            // 否则还得用completes数组，分别标记每个observable的情况才行
+            let completed = true;
+            let inputCompleted = false;
+            const subscriptionInput = input.subscribe({
                 next(v) {
-                    currentTime = Date.now();
+                    /* 不论前一个值发出的observable完成与否，都需要做一下两件事
+                     * 1. 将前一个observable取消订阅，若完成了就在取消之前调用了observer.next若未完成，则直接取消订阅，
+                     * 就不会再调用complete，也就不会执行observer.next
+                     * 2. 新发出一个observable，并订阅                                                               */
+                    subscription && subscription.unsubscribe();
+                    const observable = durationSelector(v);
+                    completed = false;  // 每次发射即重置为false，表示当前还有未完成的observable
+                    subscription = observable.subscribe({
+                        complete() {
+                            completed = true;  // 表示发射的observable已完成
+                            observer.next(v);
 
-                    if (currentTime - lastTime < time)
-                        clearTimeout(timeoutId);
-
-                    timeoutId = setTimeout(() => {
-                        observer.next(v);
-                    }, time);
-
-                    lastTime = currentTime;
-                },
-                complete: observer.complete
-            });
-        });
-    }
-    /* debounceTime和throttleTime的区别
-     * debounceTime是前值发出后time时间段内没有后值发出就发出该值，若有，则抛弃前值，继续判断新值...
-     * throttleTime是前值发出后time时间段内的后值全部忽略，超过time时间段后的第一个值再发出，其后time时间段的值忽略... */
-
-    // a值发出后time时间段内的值都省略，超过这段时间后再发出第二个值b，b值发出后time时间段内的值省略，超过这个时间段发出第三个值c...
-    throttleTime(time = 1000) {  // 节流 即一段时间内只发出第一个值
-        // 不这么写的理由同debounceTime
-        // return this.throttle(v => Observable.timer(time));
-        
-        const input = this;
-        return Observable.create(function (observer) {
-            let lastTime = 0;
-            let currentTime = 0;
-
-            return input.subscribe({
-                next(v) {
-                    currentTime = Date.now();
-                    if (!lastTime) {
-                        observer.next(v);
-                        lastTime = currentTime;
-                        return;
-                    }
-
-                    if (currentTime - lastTime > time) {
-                        observer.next(v);
-                        lastTime = currentTime;
-                    }
+                            if (inputCompleted)
+                                observer.complete(arg);
+                        }
+                    });
                 },
                 error: observer.error,
-                complete: observer.complete
+                // observer.complete何时运行见audit中分析
+                complete(arg) {
+                    if (completed)
+                        observer.complete(arg);
+                }
             });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscription && subscription.unsubscribe();
+            };
         });
     }
 
@@ -1044,6 +1057,124 @@ class Observable {
         });
     }
 
+    auditTime(time = 1000) {
+        // return this.audit(v => Observable.timer(time));
+        
+        const input = this;
+        return Observable.create(function (observer) {
+            let latest;
+            let timeoutId;
+            let canLaunch = true;
+            let inputCompleted = false;
+            let completed = true;
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    latest = v;
+
+                    if (!canLaunch)
+                        return;
+
+                    canLaunch = false;
+                    timeoutId = setTimeout(() => {
+                        canLaunch = true;
+                        observer.next(latest);
+
+                        if (inputCompleted)
+                            observer.complete();
+                    }, time);
+                },
+                error: observer.error,
+                complete(arg) {
+                    inputCompleted = true;
+
+                    if (canLaunch)
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                if (timeout !== undefined)
+                    clearTimeout(timeoutId);
+                subscriptionInput.unsubscribe();
+            };
+        });
+    }
+
+    // a值发出后time时间段内的值都省略，超过这段时间后再发出第二个值b，b值发出后time时间段内的值省略，超过这个时间段发出第三个值c...
+    throttleTime(time = 1000) {  // 节流 即一段时间内只发出第一个值
+        // 不这么写的理由同debounceTime
+        // return this.throttle(v => Observable.timer(time));
+        
+        const input = this;
+        return Observable.create(function (observer) {
+            let lastTime = 0;
+            let currentTime = 0;
+
+            return input.subscribe({
+                next(v) {
+                    currentTime = Date.now();
+                    if (!lastTime) {
+                        observer.next(v);
+                        lastTime = currentTime;
+                        return;
+                    }
+
+                    if (currentTime - lastTime > time) {
+                        observer.next(v);
+                        lastTime = currentTime;
+                    }
+                },
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
+    }
+
+    debounceTime(time = 1000) {  // debounce 去抖动，即用新值刷新旧值
+        /* return this.debounce(v => Observable.timer(time));
+         * 不用上面代码写的原因还是定时器不稳定的因素，特别是一阶observable的complete和二阶observable的发射数据在同一时间节点上时，
+         * 谁先谁后是不一定的，所以同一个代码运行几次的结果可能都不同，而直接在input事件流中判断时间不会发生上述问题，运行几次输出
+         * 的结果基本都是相同的，throttleTime同理 */
+
+        const input = this;
+        return Observable.create(function (observer) {
+            let lastTime = 0;
+            let currentTime = 0;
+            let timeoutId = -1;
+            let inputCompleted = false;
+            let completed = true;
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    currentTime = Date.now();
+
+                    if (currentTime - lastTime < time)
+                        clearTimeout(timeoutId);
+
+                    completed = false;
+                    timeoutId = setTimeout(() => {
+                        completed = true;
+                        observer.next(v);
+                        if (inputCompleted)
+                            observer.complete();
+                    }, time);
+
+                    lastTime = currentTime;
+                },
+                complete(arg) {
+                    inputCompleted = true;
+                    if (completed)
+                        observer.complete(arg);
+                }
+            });
+
+            return function () {
+                clearTimeout(timeoutId);
+                subscriptionInput.unsubscribe();
+            };
+        });
+    }
+
     /* 当是input也是个定时器时，若设定的time为input的周期的倍数或者input的周期为time的倍数时，发射数据时会在相同时间节点上相遇
      * 这时候由于定时器可能是通过多线程跑的，加入js主线程的消息队列时，先后顺序并不确定，所以会出现相同代码取样不同的情况
      * 因此最好将time的值适当加个1，如用1001代替1000，2501替代2500，当然这么做取样数很大时就会由误差
@@ -1055,10 +1186,10 @@ class Observable {
 
     buffer(observable) {
         const input = this;
-        let buffer = [];
-        let completed = false;
 
         return Observable.create(function (observer) {
+            let buffer = [];
+            let completed = false;
             const subscriptionInput = input.subscribe({
                 next(v) {
                     buffer.push(v);
@@ -1286,6 +1417,10 @@ class Observable {
         return Observable.combineLatest(project, this, ...observables);
     }
 
+    combineAll() {
+
+    }
+
     race(...observables) {
         return Observable.race(this, ...observables);
     }
@@ -1395,6 +1530,18 @@ Observable.create = function (fn) {
     }
 
     return new Observable(fn);
+};
+
+Observable.defer = function (deferFn) {
+    if (typeof deferFn !== 'function') {
+        console.warn('defer: deferFn is not a function!');
+        deferFn = () => Observable.empty();
+    }
+
+    const observable = Observable.empty();
+    observable.defer = deferFn;
+
+    return observable;
 };
 
 Observable.empty = function (val) {
@@ -1513,6 +1660,15 @@ Observable.intervalNowFrom = function (array, time) {
                 clearInterval(id);
         };
     });
+};
+
+Observable.range = function (start = 0, end = 0) {
+    const array = [];
+    const length = end - start + 1;
+    for (let i = 0; i < length; i++)
+        array[i] = start + i;
+
+    return Observable.from(array);
 };
 
 Observable.timer = function (beginTime, time) {
