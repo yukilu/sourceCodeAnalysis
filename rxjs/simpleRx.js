@@ -884,6 +884,27 @@ class Observable {
         return Observable.concat(...observables);
     }
 
+    repeatInfinity() {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subscription;
+            const observerInput = {
+                next: observer.next,
+                error: observer.error,
+                complete(arg) {
+                    subscription && subscription.unsubscribe();
+                    subscription = input.subscribe(observerInput);
+                }
+            };
+
+            subscription = input.subscribe(observerInput);
+
+            return function () {
+                subscription.unsubscribe();
+            };
+        });
+    }
+
     audit(durationSelector) {
         const input = this;
         return Observable.create(function (observer) {
@@ -1568,6 +1589,7 @@ class Observable {
         const input = this;
         const type = typeof project;
         const temp = project;
+        
         if (type !== 'function') {
             console.warn(`withLatestFrom: project must be a function ,but now is ${type}`);
             project = (...args) => args;
@@ -1611,6 +1633,154 @@ class Observable {
             return function () {
                 subscriptionInput.unsubscribe();
                 subscriptions.forEach(subscription => subscription.unsubscribe());
+            };
+        });
+    }
+
+    // observable创建时，就已经将其要做的next,error,complete等事都排好了，所以observable一但创建，其执行方式无法修改，observable
+    // 只能处理已经安排好的事，如果要考虑未来让其执行next等，只能换用subject来处理，正如此处的window函数中
+    window(windowBoundaries) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subject = new Subject();
+            observer.next(subject);
+
+            const subscriptionInput = input.subscribe({
+                // 写成next: subject.next是不对的，首先subject中的this若没绑定subject，就会在调用时指向observer.next的observer，
+                // 其次，这样就将next固定到初始的subject.next上了，其实subject指向的对象是会变的，所以只能用函数包一层
+                next(v) {
+                    subject.next(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    subject.complete();
+                    observer.complete(arg);
+                }
+            });
+
+            const subscription = windowBoundaries.subscribe({
+                next(v) {
+                    subject.complete();
+                    subject = new Subject();
+                    observer.next(subject);
+                }
+            });
+
+            return function () {
+                subscription.unsubscribe();
+                subscriptionInput.unsubscribe();
+            };
+        });
+    }
+
+    windowCount(n = 1) {
+        const input = this;
+        if (!n)
+            return this;
+
+        return Observable.create(function (observer) {
+            let count = 0;
+            let subject;
+
+            return input.subscribe({
+                next(v) {
+                    if (!count++) {  // count === 0
+                        subject = new Subject();
+                        observer.next(subject);
+                    }
+
+                    subject.next(v);
+                    if (count === n) {
+                        count = 0;
+                        subject.complete();
+                    }
+                },
+                error: observer.error,
+                complete(arg) {
+                    subject && subject.complete();
+                    observer.complete(arg);
+                }
+            });
+        });
+    }
+
+    windowToggle(opening, closingSelector) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subjects = [];
+            let subscriptions = [];
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    subjects.forEach(subject => subject.next(v));
+                },
+                error: observer.error,
+                complete(arg) {
+                    subjects.forEach(subject => subject.complete());
+                    observer.complete(arg);
+                }
+            });
+
+            const subscriptionOpening = opening.subscribe({
+                next(v) {
+                    const subject = new Subject();
+                    observer.next(subject);
+                    subjects.push(subject);
+
+                    const subscriptionClosingSelector = closingSelector.subscribe({
+                        complete(arg) {
+                            subject.complete();
+                        }
+                    });
+                    subscriptions.push(subscriptionClosingSelector);
+                }
+            });
+
+            return function () {
+                subscriptionInput.unsubscribe();
+                subscriptionOpening.unsubscribe();
+                subscriptions.forEach(subscriptionClosingSelector => subscriptionClosingSelector && subscriptionClosingSelector.unsubscribe());
+            };
+        });
+    }
+
+    windowWhen(closingSelector = () => Observable.timer(2000)) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subscription;
+            let subject = new Subject();
+            observer.next(subject);
+
+            const subscriptionInput = input.subscribe({
+                next(v) {
+                    subject.next(v);
+                },
+                error: observer.error,
+                complete(arg) {
+                    subject.complete();
+                    observer.complete(arg);
+                    subscription && subscription.unsubscribe();
+                }
+            });
+
+            const observerClosing = {
+                complete(arg) {
+                    const observable = closingSelector();
+
+                    subject.complete();
+                    subscription && subscription.unsubscribe();
+                    subscription = observable.subscribe(observerClosing);
+                    subject = new Subject();
+                    observer.next(subject);
+                }
+            };
+
+            const observableClosing = closingSelector();
+            subscription = observableClosing.subscribe(observerClosing);
+
+            return function () {
+                subscription.unsubscribe();
+                subscriptionInput.unsubscribe();
             };
         });
     }
@@ -2237,10 +2407,15 @@ Observable.race = function (...observables) {
     });
 };
 
-class Subject {
+class Subject extends Observable {
     constructor() {
+        super();
         this.observers = [];
         this.completed = false;
+
+        this.next = this.next.bind(this);
+        this.error = this.error.bind(this);
+        this.complete = this.complete.bind(this);
     }
 
     subscribe(observer) {
