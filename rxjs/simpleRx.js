@@ -1816,6 +1816,8 @@ Observable.empty = function (val) {
     });
 };
 
+Observable.never = () => Observable.create(observer => {});
+
 Observable.from = function (array) {
     return Observable.create(observer => {
         array.forEach(item => observer.next(item));
@@ -1823,9 +1825,7 @@ Observable.from = function (array) {
     });
 };
 
-Observable.of = function (...args) {
-    return Observable.from(args);
-};
+Observable.of = (...args) => Observable.from(args);
 
 Observable.fromEvent = function (node, type) {
     return Observable.create(observer => {
@@ -1838,9 +1838,18 @@ Observable.fromEvent = function (node, type) {
     });
 };
 
-Observable.interval = function (time) {
-    return Observable.intervalStartFrom(0, time);
+Observable.fromPromise = function (promise) {
+    return Observable.create(function (observer) {
+        promise.then(v => {
+            observer.next(v);
+            observer.complete();
+        }, err => {
+            observer.error(err);
+        });
+    });
 };
+
+Observable.interval = time => Observable.intervalStartFrom(0, time);
 
 Observable.intervalRandom = function (start, end) {
     return Observable.create(function (observer) {
@@ -1873,9 +1882,7 @@ Observable.intervalStartFrom = function (startNum, time) {
     });
 };
 
-Observable.intervalNow = function (time) {
-    return Observable.intervalStartNowFrom(0, time);
-};
+Observable.intervalNow = time => Observable.intervalStartNowFrom(0, time);
 
 Observable.intervalStartNowFrom = function (startNum, time) {
     return Observable.create(observer => {
