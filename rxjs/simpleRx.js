@@ -159,7 +159,7 @@ class Observable {
         return Observable.empty();
     }
 
-    scan(pureFn, inital) {
+    scan(pureFn = count => count + 1, inital = 0) {
         const input = this;
         return Observable.create(function (observer) {
             let value = inital;
