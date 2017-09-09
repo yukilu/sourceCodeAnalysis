@@ -620,9 +620,12 @@ class Observable {
              * 所以fn被赋给main，在subscribe中，this.main调用，即create(fn)，fn中的this指向create创建的那个对象 */ 
             const that = this;  
             let count = 0;
-            let subscription = { unsubscribe() {} };
-            subscription = input.subscribe({
+            return subscription = input.subscribe({
                 next(v) {
+                    /* try写在回调函数next最内部，错误本应在其最初的位置被捕获，出错时，直接调用observer.error，这样
+                     * 便可知何处的代码对应何处的observer，try写外面，next是异步的时候，错误无法捕获，但try catch写
+                     * 这里，下一个next不会被中断还是会执行，所以在Observer下添加了一个this.errored属性与this.completed
+                     * 作用相同，即error后，当前observer的next都会被忽略，但input的next还是会继续调用 */
                     try {
                         const mapRtn = mapFn(v, count++); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
                         observer.next(mapRtn);
@@ -633,8 +636,6 @@ class Observable {
                 error: observer.error,
                 complete: observer.complete
             });
-
-            return subscription;
         });
     }
 
