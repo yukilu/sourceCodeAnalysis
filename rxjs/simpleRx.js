@@ -1739,7 +1739,9 @@ class Observable {
             return function () {
                 subscriptionInput.unsubscribe();
                 subscriptionOpening.unsubscribe();
-                subscriptions.forEach(subscriptionClosingSelector => subscriptionClosingSelector && subscriptionClosingSelector.unsubscribe());
+                subscriptions.forEach(subscriptionClosingSelector => {
+                    subscriptionClosingSelector && subscriptionClosingSelector.unsubscribe();
+                });
             };
         });
     }
