@@ -11,23 +11,26 @@ class Observer {
         }
 
         this.completed = false;
+        this.errored = false;
         this.next = this.next.bind(this);
         this.error = this.error.bind(this);
         this.complete = this.complete.bind(this);
     }
 
     next(v) {
-        if (!this.completed)
+        if (!this.completed && !this.errored)
             this._next && this._next(v);
     }
 
     error(err) {
-        if (!this.completed)
+        if (!this.completed && !this.errored) {
             this._error && this._error(err);
+            this.errored = true;
+        }
     }
 
     complete(arg) {
-        if (!this.completed) {
+        if (!this.completed && !this.errored) {
             this._complete && this._complete(arg);
             this.completed = true;
         }
@@ -68,7 +71,7 @@ class Observable {
 
         if (typeof unsubscribeFn === 'object')  // create中传入的fn返回值为subscription时
             subscription = unsubscribeFn;
-        else  // typeof unsubscribeFn === 'function' || unsubscribeFn === undefined
+        else if (typeof unsubscribeFn === 'function')
             subscription = {
                 unsubscribe() {
                     if (isCleared)
@@ -78,12 +81,33 @@ class Observable {
                     unsubscribeFn && unsubscribeFn();
                 }
             };
+        else // 返回值为undefined或者其他非对象非函数的值，unsubscribe设为空函数
+            subscription = {
+                unsubscribe() {}
+            };
 
         return subscription;
     }
 
     multicast(subject) {
         return new Multicasted(this, subject);
+    }
+
+    do(doFn) {
+        const input = this;
+        // 此处的传入main函数中的observer并不是subscribe(observer)中的observer，而是由subscribe传入的observer经过
+        // new Observer(observer)包装过的
+        return Observable.create(function (observer) {
+            return input.subscribe({
+                next(v) {
+                    doFn(v);
+                    observer.next(v);
+                },
+                // 此处定义的原生error指向的是该函数返回的observable订阅原生observer时经Observer包装过的observer.error
+                error: observer.error,
+                complete: observer.complete
+            });
+        });
     }
 
     empty(val) {
@@ -137,26 +161,6 @@ class Observable {
                 complete: observer.complete
             });
         });
-    }
-
-    observeOn(scheduler = 'async') {
-        const input = this;
-
-        if (scheduler === 'async')
-            return Observable.create(function (observer) {
-                const subscription = input.subscribe({
-                    next(v) {
-                        setTimeout(() => {
-                            observer.next(v);
-                        }, 0);
-                    },
-                    complete: observer.complete
-                });
-
-                return subscription;
-            });
-
-        return Observable.empty();
     }
 
     scan(pureFn = count => count + 1, initial = 0) {
@@ -616,14 +620,21 @@ class Observable {
              * 所以fn被赋给main，在subscribe中，this.main调用，即create(fn)，fn中的this指向create创建的那个对象 */ 
             const that = this;  
             let count = 0;
-            return input.subscribe({
+            let subscription = { unsubscribe() {} };
+            subscription = input.subscribe({
                 next(v) {
-                    const mapRtn = mapFn(v, count++); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
-                    observer.next(mapRtn);
+                    try {
+                        const mapRtn = mapFn(v, count++); // 若mapFn返回值是个observable时，也直接传入observer.next(v)
+                        observer.next(mapRtn);
+                    } catch (err) {
+                        observer.error(err);
+                    }
                 },
                 error: observer.error,
                 complete: observer.complete
             });
+
+            return subscription;
         });
     }
 
@@ -1786,6 +1797,52 @@ class Observable {
             };
         });
     }
+
+    catch(selector) {
+        const input = this;
+        return Observable.create(function (observer) {
+            let subscription;
+            let subscriptionInput;
+            subscriptionInput = input.subscribe({
+                next: observer.next,
+                error(err) {
+                    try {
+                        const observable = selector();
+                        subscription = observable.subscribe(observer);
+                    } catch (err) {
+                        observer.error(err);
+                    }
+                },
+                complete: observer.complete
+            });
+            
+
+            return function () {
+                subscription && subscription.unsubscribe();
+                subscriptionInput && subscriptionInput.unsubscribe();
+            };
+        });
+    }
+
+    observeOn(scheduler = 'async') {
+        const input = this;
+
+        if (scheduler === 'async')
+            return Observable.create(function (observer) {
+                const subscription = input.subscribe({
+                    next(v) {
+                        setTimeout(() => {
+                            observer.next(v);
+                        }, 0);
+                    },
+                    complete: observer.complete
+                });
+
+                return subscription;
+            });
+
+        return Observable.empty();
+    }
 }
 
 Observable.create = function (fn) {
@@ -1820,10 +1877,18 @@ Observable.empty = function (val) {
 
 Observable.never = () => Observable.create(observer => {});
 
+Observable.throw = err => Observable.create(observer => {
+    observer.error(err);
+});
+
 Observable.from = function (array) {
     return Observable.create(observer => {
-        array.forEach(item => observer.next(item));
-        observer.complete();
+        try {
+            array.forEach(item => observer.next(item));
+            observer.complete();
+        } catch (err) {
+            observer.error(err);
+        }
     });
 };
 
@@ -2421,6 +2486,7 @@ class Subject extends Observable {
         super();
         this.observers = [];
         this.completed = false;
+        this.errored = false;
 
         this.next = this.next.bind(this);
         this.error = this.error.bind(this);
@@ -2453,19 +2519,20 @@ class Subject extends Observable {
     }
 
     next(v) {
-        if (!this.completed) {
+        if (!this.completed && !this.errored) {
             this.observers.forEach(observer => observer.next && observer.next(v));
         }
     }
 
     error(err) {
-        if (!this.completed) {
+        if (!this.completed && !this.errored) {
+            this.errored = true;
             this.observers.forEach(observer => observer.error && observer.error(err));
         }
     }
 
     complete(arg) {
-        if (!this.completed) {
+        if (!this.completed && !this.errored) {
             this.completed = true;
             this.observers.forEach(observer => observer.complete && observer.complete(arg));
         }
