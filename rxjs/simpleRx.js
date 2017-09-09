@@ -159,10 +159,10 @@ class Observable {
         return Observable.empty();
     }
 
-    scan(pureFn = count => count + 1, inital = 0) {
+    scan(pureFn = count => count + 1, initial = 0) {
         const input = this;
         return Observable.create(function (observer) {
-            let value = inital;
+            let value = initial;
 
             return input.subscribe({
                 next(ev) {
@@ -1086,17 +1086,17 @@ class Observable {
     }
 
     /* audit，throttle，debounce，sample区别
+     * audit,throttle,debounce都是在能发射值的时候，发射值并同时执行一个给定的observable，而sample是一个与input并列执行的observable
      * 1. audit和throttle
-     * audit和throttle都是属于节流类型的，即在从发出一个二阶observable到其complete这个时间段的距离内，只会发出一个值，
-     * 区别在于，audit在这个阶段内，是在complete时发出最新值，而throttle在这个阶段内，是在开始时发出开始值
+     * audit和throttle都是属于节流类型的，即在从input发出值时，若当前没有observable执行，即发出的为第一个值或前面的observable已经完成，
+     * 就发出值，并同时开始执行给定的observable，该observable从开始到其complete这个时间段的距离内，只会发出一个值，
+     * 区别在于，audit在这个阶段内，是在complete时发出从input缓存的最新值，而throttle在这个阶段内，是在开始时就发出开始的值
      * 2. debounce
-     * debouce是比较前后两个发射值的距离，若小于指定值(即前一个值发出的二阶observable还没完成，就发出后一个值)，就取消
-     * 前一个的发射的二阶observable，并忽略前一个值，用后一个值来取代，如此不停比较前后两个发射值的距离，直到某一个值与
-     * 后一个值距离大于指定值时(即前一个值发出的二阶observable完成时，下一个值还没发射)，在其发出的二阶observable执行
-     * complete时，将其值发出
+     * debouce是比较前后两个发射值的距离，若小于指定值(即前一个值发出时，开始执行的observable还没完成，就发出后一个值)，就取消
+     * 前一个的observable，并忽略前一个值，用后一个值来取代，如此不停比较前后两个发射值的距离，直到某一个值与后一个值距离大于
+     * 指定值时(即前一个值发出时开始执行的observable完成时，下一个值还没发射)，在其对应的observable执行complete时，将该值发出
      * 3. sample
-     * sample不同于上述三个函数，sample有一根取样时间线(observable)与input并列执行，在取样时间线发射值时，就把从input流
-     * 缓存的最新值发射出去
+     * sample不同于上述三个函数，sample有一根取样时间线(observable)与input并列执行，在取样时间线发射值时，就把从input流缓存的最新值发射出去
      */
 
     auditTime(time = 1000) {
