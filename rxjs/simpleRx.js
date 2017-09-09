@@ -165,9 +165,9 @@ class Observable {
             let value = initial;
 
             return input.subscribe({
-                next(ev) {
+                next(v) {
+                    value = pureFn(value, v);
                     observer.next(value);
-                    value = pureFn(value);
                 }
             });
         });
