@@ -620,7 +620,7 @@ class Observable {
              * 所以fn被赋给main，在subscribe中，this.main调用，即create(fn)，fn中的this指向create创建的那个对象 */ 
             const that = this;  
             let count = 0;
-            return subscription = input.subscribe({
+            return input.subscribe({
                 next(v) {
                     /* try写在回调函数next最内部，错误本应在其最初的位置被捕获，出错时，直接调用observer.error，这样
                      * 便可知何处的代码对应何处的observer，try写外面，next是异步的时候，错误无法捕获，但try catch写
