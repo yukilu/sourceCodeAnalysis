@@ -1883,7 +1883,7 @@ Observable.bindCallback = function(fn, selector) {
                 }
             }
 
-            fn(...args, function (...args) {
+            fn(...args, (...args) => {
                 observer.next(selector(...args));
                 observer.complete();
             });
