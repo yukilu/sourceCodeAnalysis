@@ -1891,6 +1891,35 @@ Observable.bindCallback = function(fn, selector) {
     };
 };
 
+// fn形式如上，只是callback要是node形式的回调 (err, result) { ... }
+Observable.bindNodeCallback = function(fn, selector) {
+    return function (...args) {
+        return Observable.create(function (observer) {
+            if (typeof selector !== 'function') {
+                console.warn('bindCallback: selector is not a function!');
+                selector = function (...args) {
+                    const length = args.length;
+                    if (!length)
+                        return;
+                    if (length === 1)
+                        return args[0];
+                    return args;
+                }
+            }
+
+            fn(...args, (err, ...args) => {
+                if (err) {
+                    observer.error(err);
+                    return;
+                }
+
+                observer.next(selector(...args));
+                observer.complete();
+            });
+        });
+    };
+};
+
 Observable.empty = function (val) {
     return Observable.create(function (observer) {
         if (val !== undefined)
