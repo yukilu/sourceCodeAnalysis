@@ -1830,16 +1830,15 @@ class Observable {
 
         if (scheduler === 'async')
             return Observable.create(function (observer) {
-                const subscription = input.subscribe({
+                return input.subscribe({
                     next(v) {
-                        setTimeout(() => {
-                            observer.next(v);
-                        }, 0);
+                        setTimeout(() => observer.next(v), 0);
                     },
-                    complete: observer.complete
+                    error: observer.error,
+                    complete(arg) {
+                        setTimeout(() => observer.complete(arg), 0);
+                    }
                 });
-
-                return subscription;
             });
 
         return Observable.empty();
@@ -1866,6 +1865,30 @@ Observable.defer = function (deferFn) {
     observable.defer = deferFn;
 
     return observable;
+};
+
+// fn = (a, b, c, callback) { do something with a,b,c then callback(...args) }
+Observable.bindCallback = function(fn, selector) {
+    return function (...args) {
+        return Observable.create(function (observer) {
+            if (typeof selector !== 'function') {
+                console.warn('bindCallback: selector is not a function!');
+                selector = function (...args) {
+                    const length = args.length;
+                    if (!length)
+                        return;
+                    if (length === 1)
+                        return args[0];
+                    return args;
+                }
+            }
+
+            fn(...args, function (...args) {
+                observer.next(selector(...args));
+                observer.complete();
+            });
+        });
+    };
 };
 
 Observable.empty = function (val) {
