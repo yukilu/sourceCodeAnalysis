@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>rxjs</title>
+    <script type="text/javascript" src="../lib/Rx.js"></script>
+</head>
+<body>
+    <input type="text" name="input"><br/><br/>
+    <p id="count">p</p>
+    <button type="button" id="increase">INCREASE</button>
+    <button type="button" id="decrease">DECREASE</button>
+    <script type="text/javascript">
+        const { Observable, Subject, BehaviorSubject, ReplaySubject, AsyncSubject } = Rx;
+
+        const increase = document.querySelector('#increase');
+        const decrease = document.querySelector('#decrease');
+        const count = document.querySelector('#count');
+        
+        const increase$ = Observable.fromEvent(increase, 'click').map(ev => state => Object.assign({}, state, { count: state.count + 1 }));
+        const decrease$ = Observable.fromEvent(decrease, 'click').map(ev => state => Object.assign({}, state, { count: state.count - 1 }));
+
+        const state$ = Observable.merge(increase$, decrease$).scan((state, changeFn) => changeFn(state), { count: 0 });
+        state$.subscribe({ next: state => count.innerHTML = state.count });
+    </script>
+</body>
+</html>
