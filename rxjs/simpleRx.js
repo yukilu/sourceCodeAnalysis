@@ -170,6 +170,11 @@ class Observable {
 
             return input.subscribe({
                 next(v) {
+                    /* map返回值是个函数时，类似于redux通过state对象来统一处理状态
+                      * const ob1$ = some1$.map(() => state => Object.assign({}, state, { count: state.count + 1 }));
+                      * const ob2$ = some2$.map(() => state => Object.assign({}, state, { count: state.count - 1 }));
+                      * const state$ = Observable.merge(ob1$, ob2$).scan((state, changeFn) => changeFn(state), { count: 0 });
+                      * 这种情况传入的v是个函数 state => { ... }，scan中第一个参数对应的是 pureFn，所以state -> value，changeFn -> v */
                     value = pureFn(value, v);
                     observer.next(value);
                 }
@@ -385,7 +390,7 @@ class Observable {
                     vals.push(v);
                     observer.next(v);
                 },
-                error: observer.next,
+                error: observer.error,
                 complete: observer.complete
             });
         });
