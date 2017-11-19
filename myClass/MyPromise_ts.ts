@@ -54,22 +54,14 @@ class MyPromise<T> {
             self.successCallback = function (value: T): void {
                 const rtn = fulfilled && fulfilled(value);
                 if (rtn instanceof MyPromise)
-                    rtn.then((v: F): void => {
-                        resolve(v);
-                    }, e => {
-                        reject(e);
-                    });
+                    rtn.then(resolve, reject);
                 else
                     resolve(rtn);
             };
             self.failCallback = function (error: any): void {
                 const rtn = rejected && rejected(error);
                 if (rtn instanceof MyPromise)
-                    rtn.then((v: R): void => {
-                        resolve(v);
-                    }, e => {
-                        reject(e);
-                    });
+                    rtn.then(resolve, reject);
                 else
                     reject(rtn);
             };
