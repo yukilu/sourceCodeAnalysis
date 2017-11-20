@@ -15,8 +15,11 @@ class MyPromise<T> {
             if (self.resolved || self.resolving)
                 return;
 
+            // 若向resolve传入的是个promise，则当该promise决议时才会触发当前promise决议
             if (value instanceof MyPromise){
+                // 当传入值为promise时，将resolving置为true，认为当前promise处在决议中，此时重复调用resolve及reject均忽略
                 self.resolving = true;
+                // 当传入的promise决议时，将resolving置为false，同时调用对应的resolve，reject函数决议当前promise，会将resolved置为true
                 value.then((v: T): void => {
                     self.resolving = false;
                     resolveLater(v);
@@ -42,6 +45,7 @@ class MyPromise<T> {
             
             self.resolved = true;
             self.state = 'REJECTED';
+            // 禁止向reject传入promise，否则抛出错误
             if (error instanceof MyPromise)
                 throw new Error('MyPromise can\'t be passed to reject!');
 
