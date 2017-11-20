@@ -1,7 +1,9 @@
 class MyPromise<T> {
     private value: T;
     private error: any;
-    private resolved: boolean = false;
+    private resolved: boolean = false;  // 判断是否已决议，防止resolve,reject的重复调用
+    // 判断是否在决议中，当resolve传入的值为promise时，到该promise决议前，认为是决议中，在此期间防止resolve,reject重复调用
+    private resolving: boolean = false;
     private state: string = 'PENDING';
     private successCallback: (value: T) => void;
     private failCallback: (error: any) => void;
@@ -10,18 +12,24 @@ class MyPromise<T> {
         executor(resolve, reject);
 
         function resolve(value: T | MyPromise<T>): void {
-            if (self.resolved)
+            if (self.resolved || self.resolving)
                 return;
 
-            self.resolved = true;
-            if (value instanceof MyPromise)
+            if (value instanceof MyPromise){
+                self.resolving = true;
                 value.then((v: T): void => {
+                    self.resolving = false;
                     resolveLater(v);
+                }, (e: any): void => {
+                    self.resolving = false;
+                    reject(e);
                 });
+            }
             else
                 resolveLater(value);
             
             function resolveLater(value: T): void {
+                self.resolved = true;
                 self.state = 'FULFILLED';
                 self.value = value;
                 self.successCallback && self.successCallback(value);
@@ -29,11 +37,14 @@ class MyPromise<T> {
         }
 
         function reject(error: any): void {
-            if (self.resolved)
+            if (self.resolved || self.resolving)
                 return;
             
             self.resolved = true;
             self.state = 'REJECTED';
+            if (error instanceof MyPromise)
+                throw new Error('MyPromise can\'t be passed to reject!');
+
             this.error = error;
             self.failCallback && self.failCallback(error);
         }
@@ -113,10 +124,17 @@ class MyPromise<T> {
     }
 }
 
-function generatePromise<T>(value: T, time: number): MyPromise<T> {
-    return new MyPromise((resolve: (value: T) => void): void => {
+function generatePromise<T>(value: T | MyPromise<T>, time: number): MyPromise<T> {
+    return new MyPromise((resolve: (value: T | MyPromise<T>) => void): void => {
         setTimeout((): void => {
             resolve(value);
         }, time);
     });
 }
+
+let gp = generatePromise;
+console.log('begin...');
+gp(gp(0, 2000), 0).then(v => {
+    console.log(v);
+    return gp(1, 2000);
+}).then(v => console.log(v));
