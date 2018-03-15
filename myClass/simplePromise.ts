@@ -52,6 +52,7 @@ class MyPromise<T> {
             fulfilled(this.cachedValue);
         else if (this.state === 'REJECTED')
             rejected(this.cachedError);
+        
         // 进行到then时，状态为未决议，则将成功/失败回调函数缓存到当前Promise实例的对应缓存函数上
         // 然后当调用决议函数的时候会一起调用这些缓存的函数
         else {
